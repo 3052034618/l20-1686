@@ -1,0 +1,155 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=ZCOOL+KuaiLe&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Noto Sans SC', system-ui, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+  body {
+    @apply bg-dark-100 text-dark-900 min-h-screen;
+    background-image: 
+      radial-gradient(circle at 20% 20%, rgba(255, 133, 162, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(78, 205, 196, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 50% 50%, rgba(155, 93, 229, 0.05) 0%, transparent 70%);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium rounded-full 
+           shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-300
+           focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-white text-primary-600 font-medium rounded-full border-2 border-primary-200
+           shadow-md hover:shadow-lg hover:border-primary-400 hover:scale-105 active:scale-95 
+           transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary-300;
+  }
+
+  .btn-ghost {
+    @apply px-4 py-2 text-dark-600 hover:text-primary-600 hover:bg-primary-50 rounded-full
+           transition-all duration-200 focus:outline-none;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden;
+  }
+
+  .card-glow {
+    @apply relative;
+  }
+
+  .card-glow::before {
+    content: '';
+    @apply absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300;
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(155, 93, 229, 0.1));
+    filter: blur(10px);
+    z-index: -1;
+  }
+
+  .card-glow:hover::before {
+    @apply opacity-100;
+  }
+
+  .progress-bar {
+    @apply h-3 bg-dark-200 rounded-full overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .coupon {
+    @apply relative bg-gradient-coupon rounded-xl p-4 border-2 border-dashed border-primary-300
+           overflow-hidden;
+    clip-path: polygon(
+      0 0, 100% 0, 100% 30%, 97% 35%, 100% 40%, 100% 100%,
+      0 100%, 0 40%, 3% 35%, 0 30%
+    );
+  }
+
+  .coupon::before {
+    content: '';
+    @apply absolute top-1/2 -left-2 w-4 h-4 bg-dark-100 rounded-full transform -translate-y-1/2;
+  }
+
+  .coupon::after {
+    content: '';
+    @apply absolute top-1/2 -right-2 w-4 h-4 bg-dark-100 rounded-full transform -translate-y-1/2;
+  }
+
+  .badge-unlocked {
+    @apply relative;
+    animation: badgeGlow 2s ease-in-out infinite;
+  }
+
+  @keyframes badgeGlow {
+    0%, 100% {
+      filter: drop-shadow(0 0 5px rgba(255, 224, 102, 0.5));
+    }
+    50% {
+      filter: drop-shadow(0 0 15px rgba(255, 224, 102, 0.8));
+    }
+  }
+
+  .stagger-1 { animation-delay: 0.1s; }
+  .stagger-2 { animation-delay: 0.2s; }
+  .stagger-3 { animation-delay: 0.3s; }
+  .stagger-4 { animation-delay: 0.4s; }
+  .stagger-5 { animation-delay: 0.5s; }
+  .stagger-6 { animation-delay: 0.6s; }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-manga;
+  }
+
+  .text-shadow {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .animate-delay-100 { animation-delay: 100ms; }
+  .animate-delay-200 { animation-delay: 200ms; }
+  .animate-delay-300 { animation-delay: 300ms; }
+  .animate-delay-500 { animation-delay: 500ms; }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-dark-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-dark-300 rounded-full hover:bg-dark-400 transition-colors;
+}
+
+::selection {
+  @apply bg-primary-200 text-dark-900;
+}

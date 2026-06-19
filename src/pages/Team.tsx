@@ -18,11 +18,14 @@ import {
   ChevronDown,
   ChevronUp,
   BookOpen,
+  PartyPopper,
+  HelpCircle,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import TeamModal from '@/components/Modals/TeamModal';
 import ProgressBar from '@/components/ProgressBar';
 import { formatDateCN, formatDateWithWeek, getToday } from '@/utils/date';
+import type { CartItem } from '@/types';
 
 const Team = () => {
   const {
@@ -37,11 +40,14 @@ const Team = () => {
     inviteRandomMember,
     simulateTeamMemberCheckIn,
     simulateTeamMemberReading,
+    useCaptainDailySupply,
   } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [historyExpanded, setHistoryExpanded] = useState(true);
+  const [showSupplyPanel, setShowSupplyPanel] = useState(false);
+  const [expandedHistoryDate, setExpandedHistoryDate] = useState<string | null>(null);
 
   useEffect(() => {
     refreshDailyState();
@@ -53,6 +59,15 @@ const Team = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleSupply = (memberId: string, supplyType: 'checkIn' | 'reading') => {
+    useCaptainDailySupply(memberId, supplyType);
+    setShowSupplyPanel(false);
+  };
+
+  const toggleHistoryDate = (date: string) => {
+    setExpandedHistoryDate(expandedHistoryDate === date ? null : date);
   };
 
   const myMember = currentTeam?.members.find((m) => m.id === user.id);
@@ -74,16 +89,21 @@ const Team = () => {
           memberName: m.name,
           memberAvatar: m.avatar,
           checkedIn: m.todayChecked,
+          checkInSource: m.checkInSource,
           readingChapters: m.todayReadingChapters || 0,
+          readingSource: m.readingSource,
         })),
         allChecked: currentTeam.members.every((m) => m.todayChecked),
         isToday: true,
+        captainSupplyUsed: currentTeam.captainDailySupplyUsed,
       }
     : null;
 
   const displayHistory = todayRecord
     ? [todayRecord, ...(currentTeam?.dailyHistory || [])].slice(0, 7)
     : currentTeam?.dailyHistory?.slice(0, 7) || [];
+
+  const nonLeaderMembers = currentTeam?.members.filter((_, index) => index !== 0) || [];
 
   return (
     <div className="space-y-8">
@@ -216,40 +236,36 @@ const Team = () => {
                     <span
                       className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full mt-1 ${
                         member.todayChecked
-                          ? 'bg-green-100 text-green-600'
+                          ? member.checkInSource === 'captain'
+                            ? 'bg-purple-100 text-purple-600'
+                            : 'bg-green-100 text-green-600'
                           : 'bg-dark-100 text-dark-500'
                       }`}
                     >
                       {member.todayChecked ? (
-                        <>
-                          <Check size={12} /> 已打卡
-                        </>
+                        member.checkInSource === 'captain' ? (
+                          <>🎁 队长补给</>
+                        ) : (
+                          <><Check size={12} /> 已打卡</>
+                        )
                       ) : (
                         '未打卡'
                       )}
                     </span>
                     {member.todayReadingChapters > 0 && (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full mt-1 bg-primary-50 text-primary-600">
-                        📖 今日阅读{member.todayReadingChapters}章
+                      <span
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full mt-1 ${
+                          member.readingSource === 'captain'
+                            ? 'bg-purple-100 text-purple-600'
+                            : 'bg-primary-50 text-primary-600'
+                        }`}
+                      >
+                        {member.readingSource === 'captain' ? (
+                          <>📖 队长补给阅读</>
+                        ) : (
+                          <>📖 今日阅读{member.todayReadingChapters}章</>
+                        )}
                       </span>
-                    )}
-                    {isLeader && index !== 0 && !member.todayChecked && (
-                      <div className="mt-3 space-y-2">
-                        <button
-                          onClick={() => simulateTeamMemberCheckIn(member.id)}
-                          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:shadow-md hover:scale-105 active:scale-95 transition-all"
-                        >
-                          <Zap size={12} />
-                          补打卡
-                        </button>
-                        <button
-                          onClick={() => simulateTeamMemberReading(member.id, 2)}
-                          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-full bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:shadow-md hover:scale-105 active:scale-95 transition-all"
-                        >
-                          <BookOpen size={12} />
-                          补阅读
-                        </button>
-                      </div>
                     )}
                   </div>
                 ))}
@@ -277,7 +293,7 @@ const Team = () => {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3 justify-center">
+            <div className="flex flex-wrap gap-3 justify-center relative">
               <button
                 onClick={teamCheckIn}
                 disabled={myMember?.todayChecked}
@@ -290,6 +306,88 @@ const Team = () => {
                 <Calendar size={20} />
                 {myMember?.todayChecked ? '今日已打卡' : '今日打卡'}
               </button>
+
+              {isLeader && (
+                <>
+                  <button
+                    onClick={() => !currentTeam.captainDailySupplyUsed && setShowSupplyPanel(!showSupplyPanel)}
+                    disabled={currentTeam.captainDailySupplyUsed}
+                    className={`flex items-center gap-2 px-8 py-3 rounded-full font-bold text-lg transition-all relative ${
+                      currentTeam.captainDailySupplyUsed
+                        ? 'bg-dark-100 text-dark-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-manga-purple to-purple-500 text-white shadow-lg hover:shadow-xl hover:scale-105 active:scale-95'
+                    }`}
+                  >
+                    <PartyPopper size={20} />
+                    {currentTeam.captainDailySupplyUsed ? '今日补给已用完' : '队长补给'}
+                  </button>
+
+                  {showSupplyPanel && !currentTeam.captainDailySupplyUsed && (
+                    <div className="absolute top-full mt-3 left-1/2 -translate-x-1/2 z-20 w-80 bg-white rounded-2xl shadow-xl border border-dark-100 p-4 animate-fade-in-up">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-bold text-dark-800 flex items-center gap-2">
+                          <PartyPopper size={18} className="text-purple-500" />
+                          队长每日补给
+                        </h4>
+                        <button
+                          onClick={() => setShowSupplyPanel(false)}
+                          className="text-dark-400 hover:text-dark-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <p className="text-xs text-dark-500 mb-3 flex items-center gap-1">
+                        <HelpCircle size={12} />
+                        今日可使用一次，为任意成员补打卡或补阅读
+                      </p>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {nonLeaderMembers.map((member) => (
+                          <div
+                            key={member.id}
+                            className="flex items-center justify-between p-2 rounded-xl bg-dark-50"
+                          >
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={member.avatar}
+                                alt={member.name}
+                                className="w-8 h-8 rounded-full"
+                              />
+                              <div>
+                                <p className="text-sm font-medium text-dark-800">
+                                  {member.name}
+                                </p>
+                                <p className="text-xs text-dark-500">
+                                  {member.todayChecked ? '已打卡' : '未打卡'}
+                                  {member.todayReadingChapters > 0 && ` · 阅读${member.todayReadingChapters}章`}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleSupply(member.id, 'checkIn')}
+                                disabled={member.todayChecked}
+                                className={`px-2 py-1 rounded-lg text-xs font-medium transition-all ${
+                                  member.todayChecked
+                                    ? 'bg-dark-100 text-dark-400 cursor-not-allowed'
+                                    : 'bg-green-500 text-white hover:bg-green-600'
+                                }`}
+                              >
+                                补打卡
+                              </button>
+                              <button
+                                onClick={() => handleSupply(member.id, 'reading')}
+                                className="px-2 py-1 rounded-lg text-xs font-medium bg-primary-500 text-white hover:bg-primary-600 transition-all"
+                              >
+                                补阅读
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
 
               {isLeader && currentTeam.members.length < 5 && (
                 <button
@@ -382,81 +480,140 @@ const Team = () => {
 
               {historyExpanded && (
                 <div className="space-y-3">
-                  {displayHistory.map((record, idx) => (
-                    <div
-                      key={record.date}
-                      className={`p-4 rounded-2xl border-2 transition-all ${
-                        record.allChecked
-                          ? 'bg-green-50/50 border-green-200'
-                          : 'bg-dark-50/50 border-dark-100'
-                      } ${idx === 0 ? 'ring-2 ring-primary-200 ring-offset-2' : ''}`}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                            record.allChecked
-                              ? 'bg-green-500 text-white'
-                              : 'bg-dark-200 text-dark-500'
-                          }`}>
-                            {new Date(record.date).getDate()}
-                          </div>
-                          <div>
-                            <p className="font-bold text-dark-800">
-                              {formatDateWithWeek(record.date)}
-                              {idx === 0 && (
-                                <span className="ml-2 text-xs px-2 py-0.5 bg-primary-100 text-primary-600 rounded-full">
-                                  今天
-                                </span>
-                              )}
-                            </p>
-                            <p className="text-xs text-dark-500">
-                              {record.members.filter((m) => m.checkedIn).length}/{record.members.length} 人已打卡
-                            </p>
-                          </div>
-                        </div>
-                        {record.allChecked && (
-                          <span className="flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-full text-xs font-bold shadow-sm">
-                            <Zap size={12} />
-                            全队达成
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap gap-3">
-                        {record.members.map((member) => (
-                          <div
-                            key={member.memberId}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${
-                              member.checkedIn
-                                ? 'bg-green-100'
-                                : 'bg-dark-100'
-                            }`}
-                          >
-                            <img
-                              src={member.memberAvatar}
-                              alt={member.memberName}
-                              className="w-6 h-6 rounded-full border border-white"
-                            />
-                            <span className={`text-xs font-medium ${
-                              member.checkedIn
-                                ? 'text-green-700'
-                                : 'text-dark-500'
+                  {displayHistory.map((record, idx) => {
+                    const isExpanded = expandedHistoryDate === record.date;
+                    const hasCaptainSupply = record.captainSupplyUsed;
+                    const isAllCheckedValid = record.allChecked && record.members.length >= 3;
+                    return (
+                      <div
+                        key={record.date}
+                        className={`rounded-2xl border-2 transition-all overflow-hidden ${
+                          record.allChecked
+                            ? 'bg-green-50/50 border-green-200'
+                            : 'bg-dark-50/50 border-dark-100'
+                        } ${idx === 0 ? 'ring-2 ring-primary-200 ring-offset-2' : ''}`}
+                      >
+                        <button
+                          onClick={() => toggleHistoryDate(record.date)}
+                          className="w-full p-4 flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                              record.allChecked
+                                ? 'bg-green-500 text-white'
+                                : 'bg-dark-200 text-dark-500'
                             }`}>
-                              {member.memberName}
-                            </span>
-                            {member.checkedIn ? (
-                              <Check size={12} className="text-green-600" />
-                            ) : null}
-                            {member.readingChapters > 0 && (
-                              <span className="text-xs text-primary-600 font-medium">
-                                📖{member.readingChapters}章
+                              {new Date(record.date).getDate()}
+                            </div>
+                            <div className="text-left">
+                              <p className="font-bold text-dark-800">
+                                {formatDateWithWeek(record.date)}
+                                {idx === 0 && (
+                                  <span className="ml-2 text-xs px-2 py-0.5 bg-primary-100 text-primary-600 rounded-full">
+                                    今天
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-xs text-dark-500">
+                                {record.members.filter((m) => m.checkedIn).length}/{record.members.length} 人已打卡
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {record.allChecked && (
+                              <span className="flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-full text-xs font-bold shadow-sm">
+                                <Zap size={12} />
+                                全队达成
                               </span>
                             )}
+                            {isExpanded ? (
+                              <ChevronUp size={20} className="text-dark-400" />
+                            ) : (
+                              <ChevronDown size={20} className="text-dark-400" />
+                            )}
                           </div>
-                        ))}
+                        </button>
+
+                        {isExpanded && (
+                          <div className="px-4 pb-4 space-y-3">
+                            {hasCaptainSupply && (
+                              <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 rounded-xl">
+                                <span className="text-lg">🎁</span>
+                                <span className="text-sm font-medium text-purple-700">
+                                  今日队长使用了补给
+                                </span>
+                              </div>
+                            )}
+                            {isAllCheckedValid && (
+                              <div className="flex items-center gap-2 px-3 py-2 bg-yellow-50 rounded-xl">
+                                <Sparkles size={16} className="text-yellow-500" />
+                                <span className="text-sm font-medium text-yellow-700">
+                                  ✨ 全队达成，有效天数+1
+                                </span>
+                              </div>
+                            )}
+                            <div className="space-y-2">
+                              {record.members.map((member) => (
+                                <div
+                                  key={member.memberId}
+                                  className="flex items-center justify-between p-3 bg-white rounded-xl"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <img
+                                      src={member.memberAvatar}
+                                      alt={member.memberName}
+                                      className="w-10 h-10 rounded-full border-2 border-white shadow"
+                                    />
+                                    <div>
+                                      <p className="font-medium text-dark-800">
+                                        {member.memberName}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-1">
+                                    <span
+                                      className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
+                                        member.checkedIn
+                                          ? member.checkInSource === 'captain'
+                                            ? 'bg-purple-100 text-purple-600'
+                                            : 'bg-green-100 text-green-600'
+                                          : 'bg-dark-100 text-dark-500'
+                                      }`}
+                                    >
+                                      {member.checkedIn ? (
+                                        member.checkInSource === 'captain' ? (
+                                          '🎁 队长补给'
+                                        ) : (
+                                          '✓ 自己打卡'
+                                        )
+                                      ) : (
+                                        '未打卡'
+                                      )}
+                                    </span>
+                                    {member.readingChapters > 0 && (
+                                      <span
+                                        className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
+                                          member.readingSource === 'captain'
+                                            ? 'bg-purple-100 text-purple-600'
+                                            : 'bg-primary-50 text-primary-600'
+                                        }`}
+                                      >
+                                        {member.readingSource === 'captain' ? (
+                                          `📖 队长补给阅读${member.readingChapters}章`
+                                        ) : (
+                                          `📖 自己阅读${member.readingChapters}章`
+                                        )}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

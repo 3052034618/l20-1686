@@ -17,10 +17,12 @@ import {
   Tag,
   CreditCard,
   Sparkles,
+  ShoppingCart,
+  MinusCircle,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { comics } from '@/data/comics';
-import { Badge } from '@/types';
+import { Badge, CartItem } from '@/types';
 import ProgressBar from '@/components/ProgressBar';
 import CouponCard from '@/components/CouponCard';
 import BadgeItem from '@/components/BadgeItem';
@@ -38,7 +40,7 @@ import { rarityLabels } from '@/data/badges';
 type TabType = 'records' | 'coupons' | 'badges';
 type CouponTabType = 'available' | 'used' | 'expired';
 
-const ComicSelectPanel = ({
+const CartSelectPanel = ({
   couponId,
   couponAmount,
   onConfirm,
@@ -46,38 +48,61 @@ const ComicSelectPanel = ({
 }: {
   couponId: string;
   couponAmount: number;
-  onConfirm: (comicId: string, chapters: number) => void;
+  onConfirm: (cart: CartItem[]) => void;
   onCancel: () => void;
 }) => {
-  const [selectedComic, setSelectedComic] = useState(comics[0]?.id || '');
-  const selectedComicData = comics.find((c) => c.id === selectedComic);
-  const defaultChapters = selectedComicData
-    ? Math.floor(couponAmount / selectedComicData.pricePerChapter)
-    : 1;
-  const [chapterCount, setChapterCount] = useState(defaultChapters);
+  const [cart, setCart] = useState<CartItem[]>([]);
 
-  const handleComicSelect = (comicId: string) => {
-    setSelectedComic(comicId);
-    const comic = comics.find((c) => c.id === comicId);
-    if (comic) {
-      setChapterCount(Math.floor(couponAmount / comic.pricePerChapter));
+  const toggleComic = (comicId: string) => {
+    const existing = cart.find((c) => c.comicId === comicId);
+    if (existing) {
+      setCart(cart.filter((c) => c.comicId !== comicId));
+    } else {
+      const comic = comics.find((c) => c.id === comicId);
+      if (comic) {
+        const defaultChapters = Math.max(
+          1,
+          Math.min(comic.chapters, Math.floor(couponAmount / comic.pricePerChapter) || 1)
+        );
+        setCart([...cart, { comicId, chapters: defaultChapters }]);
+      }
     }
   };
 
-  const maxChapters = selectedComicData ? selectedComicData.chapters : 1;
-  const totalPrice = selectedComicData
-    ? chapterCount * selectedComicData.pricePerChapter
-    : 0;
-  const actualCouponAmount = Math.min(couponAmount, totalPrice);
-  const selfPay = Math.max(0, totalPrice - couponAmount);
-  const remainingCoupon = Math.max(0, couponAmount - totalPrice);
+  const updateChapters = (comicId: string, delta: number) => {
+    const comic = comics.find((c) => c.id === comicId);
+    if (!comic) return;
+    setCart(
+      cart.map((item) => {
+        if (item.comicId !== comicId) return item;
+        const newChapters = Math.min(
+          comic.chapters,
+          Math.max(1, item.chapters + delta)
+        );
+        return { ...item, chapters: newChapters };
+      })
+    );
+  };
+
+  const removeFromCart = (comicId: string) => {
+    setCart(cart.filter((c) => c.comicId !== comicId));
+  };
+
+  const totalOriginalPrice = cart.reduce((sum, item) => {
+    const comic = comics.find((c) => c.id === item.comicId);
+    return sum + (comic ? item.chapters * comic.pricePerChapter : 0);
+  }, 0);
+
+  const actualCouponAmount = Math.min(couponAmount, totalOriginalPrice);
+  const selfPay = Math.max(0, totalOriginalPrice - couponAmount);
+  const remainingCoupon = Math.max(0, couponAmount - totalOriginalPrice);
 
   return (
     <div className="mt-4 bg-primary-50 rounded-2xl p-4 animate-fade-in-up">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-4">
         <h4 className="font-bold text-dark-800 flex items-center gap-2">
-          <BookOpen size={16} className="text-primary-500" />
-          选择漫画和章节数
+          <ShoppingCart size={18} className="text-primary-500" />
+          购物车结算
         </h4>
         <button
           onClick={onCancel}
@@ -87,105 +112,151 @@ const ComicSelectPanel = ({
         </button>
       </div>
 
-      <div className="grid gap-2 max-h-48 overflow-y-auto mb-4 pr-1">
-        {comics.map((comic) => {
-          const isSelected = comic.id === selectedComic;
-          return (
-            <button
-              key={comic.id}
-              onClick={() => handleComicSelect(comic.id)}
-              className={`flex items-center gap-3 p-3 rounded-xl transition-all text-left ${
-                isSelected
-                  ? 'bg-primary-100 ring-2 ring-primary-400'
-                  : 'bg-white hover:bg-dark-50'
-              }`}
-            >
-              <img
-                src={comic.cover}
-                alt={comic.title}
-                className="w-10 h-14 rounded-lg object-cover flex-shrink-0"
-              />
-              <div className="flex-1 min-w-0">
-                <p
-                  className={`font-bold text-sm truncate ${
-                    isSelected ? 'text-primary-700' : 'text-dark-800'
-                  }`}
-                >
-                  {comic.title}
-                </p>
-                <p className="text-xs text-dark-400 mt-0.5">
-                  {comic.chapters} 章 · ¥{comic.pricePerChapter}/章
-                </p>
-              </div>
-              {isSelected && (
-                <CheckCircle size={18} className="text-primary-500 flex-shrink-0" />
-              )}
-            </button>
-          );
-        })}
+      <div className="mb-4">
+        <p className="text-xs text-dark-500 mb-2 font-medium">点击漫画加入/移出购物车</p>
+        <div className="grid gap-2 max-h-48 overflow-y-auto pr-1">
+          {comics.map((comic) => {
+            const isInCart = cart.some((c) => c.comicId === comic.id);
+            return (
+              <button
+                key={comic.id}
+                onClick={() => toggleComic(comic.id)}
+                className={`flex items-center gap-3 p-3 rounded-xl transition-all text-left ${
+                  isInCart
+                    ? 'bg-primary-100 ring-2 ring-primary-400'
+                    : 'bg-white hover:bg-dark-50'
+                }`}
+              >
+                <img
+                  src={comic.cover}
+                  alt={comic.title}
+                  className="w-10 h-14 rounded-lg object-cover flex-shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <p
+                    className={`font-bold text-sm truncate ${
+                      isInCart ? 'text-primary-700' : 'text-dark-800'
+                    }`}
+                  >
+                    {comic.title}
+                  </p>
+                  <p className="text-xs text-dark-400 mt-0.5">
+                    {comic.chapters} 章 · ¥{comic.pricePerChapter}/章
+                  </p>
+                </div>
+                {isInCart && (
+                  <CheckCircle size={18} className="text-primary-500 flex-shrink-0" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm text-dark-500">阅读章节数</span>
-          <span className="text-xs text-dark-400">
-            最多 {maxChapters} 章
-          </span>
+      {cart.length > 0 && (
+        <div className="bg-white rounded-xl p-4 mb-4">
+          <p className="text-sm font-bold text-dark-700 mb-3 flex items-center gap-1.5">
+            <ShoppingCart size={14} className="text-primary-500" />
+            已选漫画 ({cart.length} 部)
+          </p>
+          <div className="space-y-3">
+            {cart.map((item) => {
+              const comic = comics.find((c) => c.id === item.comicId);
+              if (!comic) return null;
+              const itemSubtotal = item.chapters * comic.pricePerChapter;
+              return (
+                <div
+                  key={item.comicId}
+                  className="flex items-center gap-3 p-3 bg-dark-50 rounded-xl"
+                >
+                  <img
+                    src={comic.cover}
+                    alt={comic.title}
+                    className="w-8 h-11 rounded-lg object-cover flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-dark-800 truncate">
+                      {comic.title}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateChapters(item.comicId, -1)}
+                          className="w-7 h-7 rounded-full bg-white flex items-center justify-center hover:bg-dark-100 transition-colors shadow-sm"
+                        >
+                          <Minus size={13} />
+                        </button>
+                        <span className="font-bold text-sm text-dark-800 w-8 text-center">
+                          {item.chapters}
+                        </span>
+                        <button
+                          onClick={() => updateChapters(item.comicId, 1)}
+                          className="w-7 h-7 rounded-full bg-white flex items-center justify-center hover:bg-dark-100 transition-colors shadow-sm"
+                        >
+                          <Plus size={13} />
+                        </button>
+                      </div>
+                      <span className="text-xs text-dark-500">
+                        × ¥{comic.pricePerChapter} = ¥{itemSubtotal.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeFromCart(item.comicId)}
+                    className="text-dark-300 hover:text-red-500 transition-colors flex-shrink-0"
+                  >
+                    <MinusCircle size={18} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex items-center justify-center gap-4">
-          <button
-            onClick={() => setChapterCount(Math.max(1, chapterCount - 1))}
-            className="w-9 h-9 rounded-full bg-dark-100 flex items-center justify-center hover:bg-dark-200 transition-colors"
-          >
-            <Minus size={16} />
-          </button>
-          <input
-            type="number"
-            min={1}
-            max={maxChapters}
-            value={chapterCount}
-            onChange={(e) => {
-              const val = parseInt(e.target.value) || 1;
-              setChapterCount(Math.min(Math.max(1, val), maxChapters));
-            }}
-            className="w-16 text-center font-bold text-lg text-dark-800 border border-dark-200 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
-          />
-          <button
-            onClick={() => setChapterCount(Math.min(maxChapters, chapterCount + 1))}
-            className="w-9 h-9 rounded-full bg-dark-100 flex items-center justify-center hover:bg-dark-200 transition-colors"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
+      )}
 
-        <div className="mt-4 pt-4 border-t border-dashed border-dark-200">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-dark-500 flex items-center gap-1.5">
-                <Tag size={14} />
-                原价
-              </span>
-              <span className="text-dark-700 font-medium">
-                ¥{totalPrice.toFixed(1)}
-              </span>
-            </div>
+      <div className="bg-white rounded-xl p-4">
+        <div className="flex items-center gap-1.5 mb-3">
+          <Receipt size={14} className="text-dark-400" />
+          <span className="text-xs text-dark-500 font-medium">消费明细</span>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-dark-500 flex items-center gap-1.5">
+              <Tag size={14} />
+              原价合计
+            </span>
+            <span className="text-dark-700 font-medium">
+              ¥{totalOriginalPrice.toFixed(1)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-green-600 flex items-center gap-1.5">
+              <Sparkles size={14} />
+              券抵扣
+            </span>
+            <span className="text-green-600 font-bold">
+              -¥{actualCouponAmount.toFixed(1)}
+            </span>
+          </div>
+          {remainingCoupon > 0 && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-green-600 flex items-center gap-1.5">
-                <Sparkles size={14} />
-                券抵扣
+                <Coins size={14} />
+                券剩余
               </span>
-              <span className="text-green-600 font-bold">
-                -¥{actualCouponAmount.toFixed(1)}
+              <span className="text-green-600 font-medium">
+                ¥{remainingCoupon.toFixed(1)}
               </span>
             </div>
-            <div className="h-px bg-dark-100 my-2" />
+          )}
+          <div className="border-t-2 border-dashed border-dark-200 my-2 pt-2">
             <div className="flex items-center justify-between">
-              <span className="text-dark-700 font-medium flex items-center gap-1.5">
-                <CreditCard size={14} />
+              <span className="text-dark-700 font-bold flex items-center gap-1.5">
+                <CreditCard size={15} />
                 自付
               </span>
               <span
-                className={`font-bold text-lg ${
+                className={`font-bold text-2xl ${
                   selfPay > 0 ? 'text-red-500' : 'text-green-500'
                 }`}
               >
@@ -193,33 +264,38 @@ const ComicSelectPanel = ({
               </span>
             </div>
           </div>
-
-          {selfPay > 0 && (
-            <p className="text-xs text-red-500 mt-3 text-center bg-red-50 py-2 rounded-lg">
-              ⚠️ 需自付 ¥{selfPay.toFixed(1)}，券包金额不足
-            </p>
-          )}
-
-          {remainingCoupon > 0 && (
-            <p className="text-xs text-green-600 mt-3 text-center bg-green-50 py-2 rounded-lg">
-              ✨ 券剩余 ¥{remainingCoupon.toFixed(1)}，本次用不完哦
-            </p>
-          )}
         </div>
+
+        {selfPay > 0 && (
+          <p className="text-xs text-red-500 mt-3 text-center bg-red-50 py-2 rounded-lg">
+            ⚠️ 需自付 ¥{selfPay.toFixed(1)}，券包金额不足
+          </p>
+        )}
+
+        {selfPay === 0 && cart.length > 0 && (
+          <p className="text-xs text-green-600 mt-3 text-center bg-green-50 py-2 rounded-lg">
+            ✨ 全额用券，无需自付！
+          </p>
+        )}
       </div>
 
       <button
-        onClick={() => onConfirm(selectedComic, chapterCount)}
-        className="mt-4 w-full py-3 bg-primary-500 text-white font-bold rounded-xl hover:bg-primary-600 transition-colors shadow-md"
+        onClick={() => onConfirm(cart)}
+        disabled={cart.length === 0}
+        className={`mt-4 w-full py-3 font-bold rounded-xl transition-colors shadow-md ${
+          cart.length > 0
+            ? 'bg-primary-500 text-white hover:bg-primary-600'
+            : 'bg-dark-200 text-dark-400 cursor-not-allowed'
+        }`}
       >
-        确认使用券包
+        {cart.length > 0 ? `确认使用 (${cart.length} 部)` : '请先选择漫画'}
       </button>
     </div>
   );
 };
 
 const Records = () => {
-  const { user, coupons, readingRecords, badges, useCoupon } = useStore();
+  const { user, coupons, readingRecords, badges, useCouponWithCart } = useStore();
   const [activeTab, setActiveTab] = useState<TabType>('records');
   const [couponTab, setCouponTab] = useState<CouponTabType>('available');
   const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
@@ -255,8 +331,8 @@ const Records = () => {
     { id: 'expired', label: `已过期 (${expiredCoupons.length})` },
   ] as const;
 
-  const handleUseCoupon = (couponId: string, comicId: string, chapters: number) => {
-    useCoupon(couponId, comicId, chapters);
+  const handleUseCoupon = (couponId: string, cart: CartItem[]) => {
+    useCouponWithCart(couponId, cart);
     setUsingCoupon(null);
   };
 
@@ -550,11 +626,11 @@ const Records = () => {
                       </div>
                     )}
                     {usingCoupon === coupon.id && (
-                      <ComicSelectPanel
+                      <CartSelectPanel
                         couponId={coupon.id}
                         couponAmount={coupon.amount}
-                        onConfirm={(comicId, chapters) =>
-                          handleUseCoupon(coupon.id, comicId, chapters)
+                        onConfirm={(cart) =>
+                          handleUseCoupon(coupon.id, cart)
                         }
                         onCancel={() => setUsingCoupon(null)}
                       />

@@ -15,6 +15,11 @@ export interface User {
     reading: number;
     readingTime?: string;
     readingTarget: number;
+    weeklyCounted: {
+      checkIn: boolean;
+      share: boolean;
+      reading: boolean;
+    };
   };
   claimedTasks: {
     date: string;
@@ -27,6 +32,11 @@ export interface User {
     readingDays: number;
     claimedWeeks: string[];
   };
+}
+
+export interface CartItem {
+  comicId: string;
+  chapters: number;
 }
 
 export type CouponType = 'daily' | 'share' | 'reading' | 'team';
@@ -53,8 +63,11 @@ export interface TeamDailyRecord {
     memberAvatar: string;
     checkedIn: boolean;
     readingChapters: number;
+    checkInSource?: 'self' | 'captain';
+    readingSource?: 'self' | 'captain';
   }[];
   allChecked: boolean;
+  captainSupplyUsed?: boolean;
 }
 
 export interface TeamMember {
@@ -63,6 +76,16 @@ export interface TeamMember {
   avatar: string;
   todayChecked: boolean;
   todayReadingChapters?: number;
+  checkInSource?: 'self' | 'captain';
+  readingSource?: 'self' | 'captain';
+}
+
+export interface CaptainSupplyLogEntry {
+  date: string;
+  targetMemberId: string;
+  targetMemberName: string;
+  action: 'checkIn' | 'reading';
+  pushedProgress: boolean;
 }
 
 export interface Team {
@@ -78,6 +101,9 @@ export interface Team {
   rewardAmount: number;
   lastTeamCheckDate: string;
   dailyHistory: TeamDailyRecord[];
+  captainDailySupplyUsed: boolean;
+  captainSupplyUsedDate: string;
+  captainSupplyLog: CaptainSupplyLogEntry[];
 }
 
 export interface ReadingRecord {

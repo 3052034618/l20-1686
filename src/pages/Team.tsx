@@ -12,11 +12,17 @@ import {
   AlertTriangle,
   UserPlus,
   Sparkles,
+  History,
+  BarChart3,
+  Zap,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import TeamModal from '@/components/Modals/TeamModal';
 import ProgressBar from '@/components/ProgressBar';
-import { formatDateCN } from '@/utils/date';
+import { formatDateCN, formatDateWithWeek, getToday } from '@/utils/date';
 
 const Team = () => {
   const {
@@ -29,10 +35,13 @@ const Team = () => {
     joinTeam,
     refreshDailyState,
     inviteRandomMember,
+    simulateTeamMemberCheckIn,
+    simulateTeamMemberReading,
   } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [joinCode, setJoinCode] = useState('');
+  const [historyExpanded, setHistoryExpanded] = useState(true);
 
   useEffect(() => {
     refreshDailyState();
@@ -56,6 +65,25 @@ const Team = () => {
   const availableTeams = allTeams.filter(
     (t) => !t.members.some((m) => m.id === user.id) && t.members.length < 5
   );
+
+  const todayRecord = currentTeam
+    ? {
+        date: getToday(),
+        members: currentTeam.members.map((m) => ({
+          memberId: m.id,
+          memberName: m.name,
+          memberAvatar: m.avatar,
+          checkedIn: m.todayChecked,
+          readingChapters: m.todayReadingChapters || 0,
+        })),
+        allChecked: currentTeam.members.every((m) => m.todayChecked),
+        isToday: true,
+      }
+    : null;
+
+  const displayHistory = todayRecord
+    ? [todayRecord, ...(currentTeam?.dailyHistory || [])].slice(0, 7)
+    : currentTeam?.dailyHistory?.slice(0, 7) || [];
 
   return (
     <div className="space-y-8">
@@ -205,6 +233,24 @@ const Team = () => {
                         📖 今日阅读{member.todayReadingChapters}章
                       </span>
                     )}
+                    {isLeader && index !== 0 && !member.todayChecked && (
+                      <div className="mt-3 space-y-2">
+                        <button
+                          onClick={() => simulateTeamMemberCheckIn(member.id)}
+                          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:shadow-md hover:scale-105 active:scale-95 transition-all"
+                        >
+                          <Zap size={12} />
+                          补打卡
+                        </button>
+                        <button
+                          onClick={() => simulateTeamMemberReading(member.id, 2)}
+                          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-full bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:shadow-md hover:scale-105 active:scale-95 transition-all"
+                        >
+                          <BookOpen size={12} />
+                          补阅读
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {currentTeam.members.length < 5 && (
@@ -302,6 +348,118 @@ const Team = () => {
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-manga-pink via-primary-500 to-manga-purple rounded-3xl blur-sm opacity-50" />
+            <div className="relative card p-6 rounded-3xl">
+              <button
+                onClick={() => setHistoryExpanded(!historyExpanded)}
+                className="w-full flex items-center justify-between mb-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-manga-pink to-primary-500 flex items-center justify-center text-white">
+                    <BarChart3 size={20} />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-display text-xl font-bold text-dark-800">
+                      团队战报
+                    </h3>
+                    <p className="text-sm text-dark-500">
+                      最近7天打卡记录
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-dark-400">
+                  <History size={18} />
+                  {historyExpanded ? (
+                    <ChevronUp size={20} />
+                  ) : (
+                    <ChevronDown size={20} />
+                  )}
+                </div>
+              </button>
+
+              {historyExpanded && (
+                <div className="space-y-3">
+                  {displayHistory.map((record, idx) => (
+                    <div
+                      key={record.date}
+                      className={`p-4 rounded-2xl border-2 transition-all ${
+                        record.allChecked
+                          ? 'bg-green-50/50 border-green-200'
+                          : 'bg-dark-50/50 border-dark-100'
+                      } ${idx === 0 ? 'ring-2 ring-primary-200 ring-offset-2' : ''}`}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                            record.allChecked
+                              ? 'bg-green-500 text-white'
+                              : 'bg-dark-200 text-dark-500'
+                          }`}>
+                            {new Date(record.date).getDate()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-dark-800">
+                              {formatDateWithWeek(record.date)}
+                              {idx === 0 && (
+                                <span className="ml-2 text-xs px-2 py-0.5 bg-primary-100 text-primary-600 rounded-full">
+                                  今天
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-xs text-dark-500">
+                              {record.members.filter((m) => m.checkedIn).length}/{record.members.length} 人已打卡
+                            </p>
+                          </div>
+                        </div>
+                        {record.allChecked && (
+                          <span className="flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-full text-xs font-bold shadow-sm">
+                            <Zap size={12} />
+                            全队达成
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        {record.members.map((member) => (
+                          <div
+                            key={member.memberId}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${
+                              member.checkedIn
+                                ? 'bg-green-100'
+                                : 'bg-dark-100'
+                            }`}
+                          >
+                            <img
+                              src={member.memberAvatar}
+                              alt={member.memberName}
+                              className="w-6 h-6 rounded-full border border-white"
+                            />
+                            <span className={`text-xs font-medium ${
+                              member.checkedIn
+                                ? 'text-green-700'
+                                : 'text-dark-500'
+                            }`}>
+                              {member.memberName}
+                            </span>
+                            {member.checkedIn ? (
+                              <Check size={12} className="text-green-600" />
+                            ) : null}
+                            {member.readingChapters > 0 && (
+                              <span className="text-xs text-primary-600 font-medium">
+                                📖{member.readingChapters}章
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : (

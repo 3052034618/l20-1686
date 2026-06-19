@@ -57,3 +57,22 @@ export const getDaysInMonth = (year: number, month: number): number => {
 export const getFirstDayOfMonth = (year: number, month: number): number => {
   return new Date(year, month, 1).getDay();
 };
+
+export const getWeekKey = (date: string | Date): string => {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const firstDayOfYear = new Date(year, 0, 1);
+  const pastDaysOfYear = (d.getTime() - firstDayOfYear.getTime()) / (1000 * 60 * 60 * 24);
+  const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+  return `${year}-W${weekNumber}`;
+};
+
+const weekDaysCN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+export const formatDateWithWeek = (date: string | Date): string => {
+  const d = new Date(date);
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  const weekDay = weekDaysCN[d.getDay()];
+  return `${month}月${day}日 ${weekDay}`;
+};

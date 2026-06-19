@@ -14,6 +14,9 @@ import {
   ChevronUp,
   Minus,
   Plus,
+  Tag,
+  CreditCard,
+  Sparkles,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { comics } from '@/data/comics';
@@ -63,8 +66,11 @@ const ComicSelectPanel = ({
 
   const maxChapters = selectedComicData ? selectedComicData.chapters : 1;
   const totalPrice = selectedComicData
-    ? (chapterCount * selectedComicData.pricePerChapter).toFixed(1)
-    : '0';
+    ? chapterCount * selectedComicData.pricePerChapter
+    : 0;
+  const actualCouponAmount = Math.min(couponAmount, totalPrice);
+  const selfPay = Math.max(0, totalPrice - couponAmount);
+  const remainingCoupon = Math.max(0, couponAmount - totalPrice);
 
   return (
     <div className="mt-4 bg-primary-50 rounded-2xl p-4 animate-fade-in-up">
@@ -151,15 +157,55 @@ const ComicSelectPanel = ({
             <Plus size={16} />
           </button>
         </div>
-        <div className="mt-3 flex items-center justify-between text-sm">
-          <span className="text-dark-500">预计花费</span>
-          <span className="font-bold text-primary-600">¥{totalPrice}</span>
+
+        <div className="mt-4 pt-4 border-t border-dashed border-dark-200">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-dark-500 flex items-center gap-1.5">
+                <Tag size={14} />
+                原价
+              </span>
+              <span className="text-dark-700 font-medium">
+                ¥{totalPrice.toFixed(1)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-green-600 flex items-center gap-1.5">
+                <Sparkles size={14} />
+                券抵扣
+              </span>
+              <span className="text-green-600 font-bold">
+                -¥{actualCouponAmount.toFixed(1)}
+              </span>
+            </div>
+            <div className="h-px bg-dark-100 my-2" />
+            <div className="flex items-center justify-between">
+              <span className="text-dark-700 font-medium flex items-center gap-1.5">
+                <CreditCard size={14} />
+                自付
+              </span>
+              <span
+                className={`font-bold text-lg ${
+                  selfPay > 0 ? 'text-red-500' : 'text-green-500'
+                }`}
+              >
+                ¥{selfPay.toFixed(1)}
+              </span>
+            </div>
+          </div>
+
+          {selfPay > 0 && (
+            <p className="text-xs text-red-500 mt-3 text-center bg-red-50 py-2 rounded-lg">
+              ⚠️ 需自付 ¥{selfPay.toFixed(1)}，券包金额不足
+            </p>
+          )}
+
+          {remainingCoupon > 0 && (
+            <p className="text-xs text-green-600 mt-3 text-center bg-green-50 py-2 rounded-lg">
+              ✨ 券剩余 ¥{remainingCoupon.toFixed(1)}，本次用不完哦
+            </p>
+          )}
         </div>
-        {parseFloat(totalPrice) > couponAmount && (
-          <p className="text-xs text-red-500 mt-1 text-center">
-            ⚠️ 花费超过券包金额（¥{couponAmount}），超出部分需自付
-          </p>
-        )}
       </div>
 
       <button
@@ -358,45 +404,93 @@ const Records = () => {
               readingRecords.map((record, index) => (
                 <div
                   key={record.id}
-                  className="card p-4 flex gap-4 animate-fade-in-up"
+                  className="card overflow-hidden animate-fade-in-up"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  <img
-                    src={record.comicCover}
-                    alt={record.comicTitle}
-                    className="w-20 h-28 rounded-lg object-cover shadow-md flex-shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div>
-                        <h4 className="font-bold text-dark-800 truncate">
-                          {record.comicTitle}
-                        </h4>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="inline-block text-xs px-2 py-0.5 bg-primary-100 text-primary-600 rounded-full">
-                            {record.category}
-                          </span>
-                          {record.couponType && (
-                            <span className="inline-block text-xs px-2 py-0.5 bg-dark-100 text-dark-500 rounded-full">
-                              来自：{couponTypeLabels[record.couponType]}
+                  <div className="p-4 flex gap-4">
+                    <img
+                      src={record.comicCover}
+                      alt={record.comicTitle}
+                      className="w-20 h-28 rounded-lg object-cover shadow-md flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div>
+                          <h4 className="font-bold text-dark-800 truncate">
+                            {record.comicTitle}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className="inline-block text-xs px-2 py-0.5 bg-primary-100 text-primary-600 rounded-full">
+                              {record.category}
                             </span>
-                          )}
+                            {record.couponType && (
+                              <span className="inline-block text-xs px-2 py-0.5 bg-dark-100 text-dark-500 rounded-full">
+                                来自：{couponTypeLabels[record.couponType]}
+                              </span>
+                            )}
+                          </div>
                         </div>
+                        <span className="flex items-center gap-1 text-green-500 font-bold whitespace-nowrap">
+                          <CheckCircle size={16} />
+                          省¥{record.savedAmount.toFixed(1)}
+                        </span>
                       </div>
-                      <span className="flex items-center gap-1 text-green-500 font-bold whitespace-nowrap">
-                        <CheckCircle size={16} />
-                        ¥{record.savedAmount.toFixed(1)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-dark-500">
-                      <span className="flex items-center gap-1">
-                        <BookOpen size={14} />
-                        阅读了 {record.chaptersRead} 章
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar size={14} />
-                        {formatDateCN(record.readDate)}
-                      </span>
+                      <div className="flex items-center gap-4 text-sm text-dark-500 mb-3">
+                        <span className="flex items-center gap-1">
+                          <BookOpen size={14} />
+                          阅读了 {record.chaptersRead} 章
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar size={14} />
+                          {formatDateCN(record.readDate)}
+                        </span>
+                      </div>
+
+                      {(record.totalPrice !== undefined || record.couponAmount !== undefined || record.selfPayAmount !== undefined) && (
+                        <div className="bg-gradient-to-br from-dark-50 to-white rounded-xl p-3 border border-dashed border-dark-200">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <Receipt size={14} className="text-dark-400" />
+                            <span className="text-xs text-dark-500 font-medium">消费明细</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-dark-500">原价</span>
+                              <span className="text-dark-700">
+                                ¥{(record.totalPrice ?? 0).toFixed(1)}
+                              </span>
+                            </div>
+                            {(record.couponAmount ?? 0) > 0 && (
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-green-600 flex items-center gap-1">
+                                  <Tag size={12} />
+                                  券抵扣
+                                </span>
+                                <span className="text-green-600 font-medium">
+                                  -¥{(record.couponAmount ?? 0).toFixed(1)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="h-px bg-dark-100 my-1" />
+                            <div className="flex items-center justify-between">
+                              <span className="text-dark-700 font-medium text-sm">实付</span>
+                              <span
+                                className={`font-bold ${
+                                  (record.selfPayAmount ?? 0) > 0
+                                    ? 'text-red-500'
+                                    : 'text-green-500'
+                                }`}
+                              >
+                                ¥{(record.selfPayAmount ?? record.totalPrice ?? 0).toFixed(1)}
+                              </span>
+                            </div>
+                            {(record.selfPayAmount ?? 0) === 0 && (record.couponAmount ?? 0) > 0 && (
+                              <p className="text-xs text-green-600 mt-2 text-center bg-green-50 py-1.5 rounded-lg">
+                                ✨ 全额用券，无需自付！
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

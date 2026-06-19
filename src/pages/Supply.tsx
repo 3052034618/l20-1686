@@ -11,6 +11,9 @@ import {
   TrendingUp,
   Timer,
   Wallet,
+  Target,
+  Award,
+  Trophy,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { categories } from '@/data/categories';
@@ -38,9 +41,12 @@ const Supply = () => {
     shareChapter,
     readChapter,
     claimTaskReward,
+    claimWeeklyReward,
     setShowCategorySelector,
     useCoupon,
     refreshDailyState,
+    weeklyTargets,
+    weeklyRewardAmounts,
   } = useStore();
 
   const [tasks, setTasks] = useState<DailyTask[]>([]);
@@ -62,7 +68,9 @@ const Supply = () => {
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-      setCountdown(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+      setCountdown(
+        `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+      );
     };
     calc();
     const timer = setInterval(calc, 1000);
@@ -72,7 +80,10 @@ const Supply = () => {
   useEffect(() => {
     const today = getToday();
     const isClaimed = (taskType: 'checkIn' | 'share' | 'reading') => {
-      return user.claimedTasks.date === today && user.claimedTasks.tasks.includes(taskType);
+      return (
+        user.claimedTasks.date === today &&
+        user.claimedTasks.tasks.includes(taskType)
+      );
     };
 
     const dailyTasks: DailyTask[] = [
@@ -145,6 +156,48 @@ const Supply = () => {
     (sum, t) => sum + (taskRewardMap[t] || 0),
     0
   );
+
+  const weeklyTaskList = [
+    {
+      type: 'checkIn' as const,
+      title: '签到挑战',
+      description: '本周连续签到7天',
+      icon: Target,
+      progress: user.weeklyTasks.checkInDays,
+      target: weeklyTargets.checkIn,
+      reward: weeklyRewardAmounts.checkIn,
+      color: 'from-manga-blue to-cyan-500',
+    },
+    {
+      type: 'share' as const,
+      title: '分享挑战',
+      description: '本周分享7天正版漫画',
+      icon: Award,
+      progress: user.weeklyTasks.shareDays,
+      target: weeklyTargets.share,
+      reward: weeklyRewardAmounts.share,
+      color: 'from-manga-purple to-purple-500',
+    },
+    {
+      type: 'reading' as const,
+      title: '阅读挑战',
+      description: '本周完成7天阅读任务',
+      icon: Trophy,
+      progress: user.weeklyTasks.readingDays,
+      target: weeklyTargets.reading,
+      reward: weeklyRewardAmounts.reading,
+      color: 'from-manga-pink to-rose-500',
+    },
+  ];
+
+  const isWeeklyClaimed = (taskType: 'checkIn' | 'share' | 'reading') => {
+    const weekKeyWithType = `${user.weeklyTasks.weekKey}-${taskType}`;
+    return user.weeklyTasks.claimedWeeks.includes(weekKeyWithType);
+  };
+
+  const weeklyClaimedAmount = weeklyTaskList.reduce((sum, task) => {
+    return sum + (isWeeklyClaimed(task.type) ? task.reward : 0);
+  }, 0);
 
   return (
     <div className="space-y-8">
@@ -336,8 +389,98 @@ const Supply = () => {
         </div>
       </div>
 
+      <div className="animate-fade-in-up stagger-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display text-2xl font-bold text-dark-800 flex items-center gap-2">
+            <Trophy size={24} className="text-manga-yellow" />
+            本周挑战
+          </h2>
+          <div className="flex items-center gap-1.5 text-manga-purple font-medium bg-purple-50 px-3 py-1.5 rounded-full text-sm">
+            <Award size={16} />
+            <span>本周已领 ¥{weeklyClaimedAmount.toFixed(1)}</span>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-gradient-to-br from-blue-50 via-white to-purple-50 p-1">
+          <div className="rounded-xl bg-white/80 backdrop-blur-sm p-4 space-y-3">
+            {weeklyTaskList.map((task, index) => {
+              const Icon = task.icon;
+              const isCompleted = task.progress >= task.target;
+              const isClaimed = isWeeklyClaimed(task.type);
+              const canClaim = isCompleted && !isClaimed;
+
+              return (
+                <div
+                  key={task.type}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-white/70 shadow-sm hover:shadow-md transition-shadow"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div
+                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${task.color} flex items-center justify-center shadow-lg flex-shrink-0`}
+                  >
+                    <Icon size={28} className="text-white" />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="font-display text-lg font-bold text-dark-800">
+                        {task.title}
+                      </h3>
+                      <div className="flex items-center gap-1 text-manga-blue">
+                        <Gift size={16} />
+                        <span className="font-bold">+{task.reward}元</span>
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-dark-500 mb-3">{task.description}</p>
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <ProgressBar
+                          progress={task.progress}
+                          total={task.target}
+                          color="blue"
+                          size="md"
+                        />
+                        <div className="flex justify-between mt-1 text-xs text-dark-500">
+                          <span>本周已完成 {task.progress} 天</span>
+                          <span>目标 {task.target} 天</span>
+                        </div>
+                      </div>
+
+                      {canClaim && (
+                        <button
+                          onClick={() => claimWeeklyReward(task.type)}
+                          className="bg-gradient-to-r from-manga-blue to-cyan-500 text-white text-sm px-4 py-2 rounded-xl font-bold shadow-md hover:shadow-lg transition-all hover:scale-105 animate-pulse-glow"
+                        >
+                          领取
+                        </button>
+                      )}
+
+                      {isClaimed && (
+                        <div className="flex items-center gap-1 text-green-500 text-sm font-medium">
+                          <Award size={18} />
+                          已领取
+                        </div>
+                      )}
+
+                      {!isCompleted && (
+                        <div className="flex items-center gap-1 text-dark-400 text-sm">
+                          <Target size={16} />
+                          进行中
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {recommendedComics.length > 0 && (
-        <div className="animate-fade-in-up stagger-4">
+        <div className="animate-fade-in-up stagger-5">
           <h2 className="font-display text-2xl font-bold text-dark-800 mb-4 flex items-center gap-2">
             <BookOpen size={24} className="text-primary-500" />
             为你推荐
@@ -366,17 +509,27 @@ const Supply = () => {
                   <div className="space-y-2">
                     <button
                       onClick={() => readChapter(comic.id, 1)}
-                      disabled={user.todayTasks.reading >= user.todayTasks.readingTarget}
+                      disabled={
+                        user.todayTasks.reading >=
+                        user.todayTasks.readingTarget
+                      }
                       className="w-full text-xs py-1.5 bg-manga-blue text-white rounded-full hover:bg-manga-blue/80 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
-                      {user.todayTasks.reading >= user.todayTasks.readingTarget
+                      {user.todayTasks.reading >=
+                      user.todayTasks.readingTarget
                         ? '今日阅读已完成'
                         : `模拟阅读1章 (+¥${comic.pricePerChapter})`}
                     </button>
                     {availableCoupons.length > 0 && (
                       <button
                         onClick={() =>
-                          useCoupon(availableCoupons[0].id, comic.id, Math.floor(availableCoupons[0].amount / comic.pricePerChapter))
+                          useCoupon(
+                            availableCoupons[0].id,
+                            comic.id,
+                            Math.floor(
+                              availableCoupons[0].amount / comic.pricePerChapter
+                            )
+                          )
                         }
                         className="w-full text-xs py-1.5 bg-primary-500 text-white rounded-full hover:bg-primary-600 transition-colors"
                       >
@@ -409,7 +562,11 @@ const Supply = () => {
                 coupon={coupon}
                 onUse={() => {
                   if (recommendedComics.length > 0) {
-                    useCoupon(coupon.id, recommendedComics[0].id, Math.floor(coupon.amount / recommendedComics[0].pricePerChapter));
+                    useCoupon(
+                      coupon.id,
+                      recommendedComics[0].id,
+                      Math.floor(coupon.amount / recommendedComics[0].pricePerChapter)
+                    );
                   }
                 }}
                 delay={index * 100}

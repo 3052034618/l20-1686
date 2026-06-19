@@ -8,6 +8,7 @@ import {
   Badge,
   ToastMessage,
   TeamMember,
+  TeamDailyRecord,
 } from '@/types';
 import { categories } from '@/data/categories';
 import { comics } from '@/data/comics';
@@ -18,7 +19,7 @@ import {
   getAvailableCoupons,
   calculateTotalSaved,
 } from '@/utils/coupon';
-import { getToday, isYesterday, formatDate, daysUntil } from '@/utils/date';
+import { getToday, isYesterday, formatDate, daysUntil, getWeekKey } from '@/utils/date';
 
 const randomMemberPool = [
   { name: '二次元少女', seed: 'anime' },
@@ -30,6 +31,18 @@ const randomMemberPool = [
   { name: '画师小梦', seed: 'artist' },
   { name: '漫社社长', seed: 'president' },
 ];
+
+const weeklyRewardAmounts = {
+  checkIn: 10,
+  share: 10,
+  reading: 15,
+};
+
+const weeklyTargets = {
+  checkIn: 7,
+  share: 7,
+  reading: 7,
+};
 
 interface AppState {
   user: User;
@@ -43,6 +56,9 @@ interface AppState {
   showCouponModal: boolean;
   newCoupon: Coupon | null;
 
+  weeklyRewardAmounts: typeof weeklyRewardAmounts;
+  weeklyTargets: typeof weeklyTargets;
+
   refreshDailyState: () => void;
   setShowCategorySelector: (show: boolean) => void;
   toggleCategory: (categoryId: string) => void;
@@ -52,6 +68,7 @@ interface AppState {
   shareChapter: () => void;
   readChapter: (comicId: string, chapters: number) => void;
   claimTaskReward: (taskType: 'checkIn' | 'share' | 'reading') => void;
+  claimWeeklyReward: (taskType: 'checkIn' | 'share' | 'reading') => void;
 
   createTeam: (name: string) => void;
   joinTeam: (code: string) => void;
@@ -59,6 +76,8 @@ interface AppState {
   teamCheckIn: () => void;
   claimTeamReward: () => void;
   inviteRandomMember: () => void;
+  simulateTeamMemberCheckIn: (memberId: string) => void;
+  simulateTeamMemberReading: (memberId: string, chapters: number) => void;
 
   useCoupon: (couponId: string, comicId: string, chapters: number) => void;
 
@@ -92,6 +111,13 @@ const mockUser: User = {
     date: '',
     tasks: [],
   },
+  weeklyTasks: {
+    weekKey: '',
+    checkInDays: 0,
+    shareDays: 0,
+    readingDays: 0,
+    claimedWeeks: [],
+  },
 };
 
 const mockMembers: TeamMember[] = [
@@ -118,6 +144,28 @@ const mockMembers: TeamMember[] = [
   },
 ];
 
+const generateMockDailyHistory = (): TeamDailyRecord[] => {
+  const history: TeamDailyRecord[] = [];
+  const baseMembers = [
+    { memberId: 'member-001', memberName: '漫迷小王', memberAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=manga' },
+    { memberId: 'member-002', memberName: '二次元少女', memberAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=anime' },
+    { memberId: 'member-003', memberName: '热血少年', memberAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=shounen' },
+  ];
+
+  for (let i = 6; i >= 1; i--) {
+    const date = formatDate(new Date(Date.now() - i * 24 * 60 * 60 * 1000));
+    const members = baseMembers.map((m) => {
+      const checkedIn = Math.random() > 0.3;
+      const readingChapters = checkedIn ? Math.floor(Math.random() * 5) + 1 : 0;
+      return { ...m, checkedIn, readingChapters };
+    });
+    const allChecked = members.every((m) => m.checkedIn);
+    history.push({ date, members, allChecked });
+  }
+
+  return history;
+};
+
 const mockTeam: Team = {
   id: 'team-001',
   name: '漫协追番小分队',
@@ -130,6 +178,7 @@ const mockTeam: Team = {
   rewardClaimed: false,
   rewardAmount: 20,
   lastTeamCheckDate: '',
+  dailyHistory: generateMockDailyHistory(),
 };
 
 const mockRecords: ReadingRecord[] = [
@@ -143,6 +192,11 @@ const mockRecords: ReadingRecord[] = [
     savedAmount: 2.5,
     readDate: formatDate(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)),
     category: '热血',
+    couponType: 'daily',
+    couponId: 'coupon-mock-001',
+    totalPrice: 2.5,
+    couponAmount: 2.5,
+    selfPayAmount: 0,
   },
   {
     id: 'record-002',
@@ -154,6 +208,9 @@ const mockRecords: ReadingRecord[] = [
     savedAmount: 1.2,
     readDate: formatDate(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)),
     category: '恋爱',
+    totalPrice: 1.2,
+    couponAmount: 0,
+    selfPayAmount: 1.2,
   },
 ];
 
@@ -167,11 +224,40 @@ const initializeBadges = (userId: string): Badge[] => {
 
 const refreshDailyTasks = (user: User): User => {
   const today = getToday();
+  const currentWeekKey = getWeekKey(today);
 
   if (user.claimedTasks.date !== today) {
     let continuousDays = user.continuousCheckInDays;
     if (user.lastCheckInDate && !isYesterday(user.lastCheckInDate) && user.lastCheckInDate !== today) {
       continuousDays = 0;
+    }
+
+    let weeklyTasks = { ...user.weeklyTasks };
+
+    if (weeklyTasks.weekKey !== currentWeekKey) {
+      weeklyTasks = {
+        weekKey: currentWeekKey,
+        checkInDays: 0,
+        shareDays: 0,
+        readingDays: 0,
+        claimedWeeks: weeklyTasks.claimedWeeks,
+      };
+    } else {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatDate(yesterday);
+      
+      if (user.lastActiveDate === yesterdayStr || user.claimedTasks.date === yesterdayStr) {
+        if (user.todayTasks.checkIn) {
+          weeklyTasks.checkInDays += 1;
+        }
+        if (user.todayTasks.share) {
+          weeklyTasks.shareDays += 1;
+        }
+        if (user.todayTasks.reading >= user.todayTasks.readingTarget) {
+          weeklyTasks.readingDays += 1;
+        }
+      }
     }
 
     return {
@@ -191,6 +277,7 @@ const refreshDailyTasks = (user: User): User => {
         date: today,
         tasks: [],
       },
+      weeklyTasks,
     };
   }
 
@@ -201,6 +288,26 @@ const refreshTeamDailyState = (team: Team): Team => {
   const today = getToday();
 
   if (team.lastTeamCheckDate !== today) {
+    const yesterdayMembers = team.members.map((m) => ({
+      memberId: m.id,
+      memberName: m.name,
+      memberAvatar: m.avatar,
+      checkedIn: m.todayChecked,
+      readingChapters: m.todayReadingChapters || 0,
+    }));
+    const allChecked = yesterdayMembers.every((m) => m.checkedIn);
+
+    const yesterdayRecord: TeamDailyRecord = {
+      date: team.lastTeamCheckDate || getToday(),
+      members: yesterdayMembers,
+      allChecked,
+    };
+
+    let newDailyHistory = [...team.dailyHistory];
+    if (team.lastTeamCheckDate) {
+      newDailyHistory = [yesterdayRecord, ...team.dailyHistory].slice(0, 14);
+    }
+
     const refreshedMembers = team.members.map((m) => ({
       ...m,
       todayChecked: false,
@@ -211,6 +318,7 @@ const refreshTeamDailyState = (team: Team): Team => {
       ...team,
       members: refreshedMembers,
       lastTeamCheckDate: today,
+      dailyHistory: newDailyHistory,
     };
   }
 
@@ -234,6 +342,9 @@ export const useStore = create<AppState>()(
       showCategorySelector: true,
       showCouponModal: false,
       newCoupon: null,
+
+      weeklyRewardAmounts,
+      weeklyTargets,
 
       refreshDailyState: () => {
         set((state) => {
@@ -344,7 +455,8 @@ export const useStore = create<AppState>()(
             state.user.todayTasks.readingTarget
           );
 
-          const savedAmount = chapters * comic.pricePerChapter;
+          const totalPrice = chapters * comic.pricePerChapter;
+          const savedAmount = totalPrice;
 
           const newRecord: ReadingRecord = {
             id: generateId(),
@@ -356,6 +468,9 @@ export const useStore = create<AppState>()(
             savedAmount,
             readDate: getToday(),
             category: category?.name || '',
+            totalPrice,
+            couponAmount: 0,
+            selfPayAmount: totalPrice,
           };
 
           return {
@@ -452,6 +567,64 @@ export const useStore = create<AppState>()(
         get().checkBadges();
       },
 
+      claimWeeklyReward: (taskType) => {
+        get().refreshDailyState();
+        const { user, coupons } = get();
+        const currentWeekKey = getWeekKey(getToday());
+
+        if (user.weeklyTasks.weekKey !== currentWeekKey) {
+          get().addToast('error', '本周数据异常，请刷新后重试');
+          return;
+        }
+
+        const weekKeyWithType = `${currentWeekKey}-${taskType}`;
+        if (user.weeklyTasks.claimedWeeks.includes(weekKeyWithType)) {
+          get().addToast('info', '本周已经领取过这个奖励了~');
+          return;
+        }
+
+        let progress = 0;
+        switch (taskType) {
+          case 'checkIn':
+            progress = user.weeklyTasks.checkInDays;
+            break;
+          case 'share':
+            progress = user.weeklyTasks.shareDays;
+            break;
+          case 'reading':
+            progress = user.weeklyTasks.readingDays;
+            break;
+        }
+
+        if (progress < weeklyTargets[taskType]) {
+          get().addToast('error', `本周进度不够哦，还差 ${weeklyTargets[taskType] - progress} 天`);
+          return;
+        }
+
+        const categoryName =
+          categories.find((c) => c.id === user.selectedCategories[0])?.name ||
+          '通用';
+
+        const amount = weeklyRewardAmounts[taskType];
+        const coupon = createCoupon(user.id, amount, taskType === 'checkIn' ? 'daily' : taskType, categoryName, 30);
+
+        set((state) => ({
+          coupons: [...state.coupons, coupon],
+          newCoupon: coupon,
+          showCouponModal: true,
+          user: {
+            ...state.user,
+            weeklyTasks: {
+              ...state.user.weeklyTasks,
+              claimedWeeks: [...state.user.weeklyTasks.claimedWeeks, weekKeyWithType],
+            },
+          },
+        }));
+
+        get().addToast('success', `获得周任务奖励 ${amount} 元阅读券！`);
+        get().checkBadges();
+      },
+
       createTeam: (name) => {
         const { user, teams } = get();
 
@@ -482,6 +655,7 @@ export const useStore = create<AppState>()(
           rewardClaimed: false,
           rewardAmount: 20,
           lastTeamCheckDate: getToday(),
+          dailyHistory: [],
         };
 
         set({
@@ -719,6 +893,110 @@ export const useStore = create<AppState>()(
         get().checkBadges();
       },
 
+      simulateTeamMemberCheckIn: (memberId) => {
+        get().refreshDailyState();
+        const { currentTeam, user } = get();
+        if (!currentTeam) return;
+
+        if (currentTeam.members[0]?.id !== user.id) {
+          get().addToast('error', '只有队长才能补打卡');
+          return;
+        }
+
+        const member = currentTeam.members.find((m) => m.id === memberId);
+        if (!member) {
+          get().addToast('error', '未找到该成员');
+          return;
+        }
+
+        if (member.todayChecked) {
+          get().addToast('info', '该成员今天已经打卡过了');
+          return;
+        }
+
+        const memberCount = currentTeam.members.length;
+        const minMembers = 3;
+
+        const updatedMembers = currentTeam.members.map((m) =>
+          m.id === memberId ? { ...m, todayChecked: true } : m
+        );
+
+        const allChecked = updatedMembers.every((m) => m.todayChecked);
+        let newCurrentDays = currentTeam.currentDays;
+        let rewardUnlocked = currentTeam.rewardUnlocked;
+
+        if (allChecked && memberCount >= minMembers) {
+          newCurrentDays += 1;
+          if (newCurrentDays >= currentTeam.targetDays) {
+            rewardUnlocked = true;
+          }
+        }
+
+        const updatedTeam = {
+          ...currentTeam,
+          members: updatedMembers,
+          currentDays: newCurrentDays,
+          rewardUnlocked,
+        };
+
+        set((state) => ({
+          teams: state.teams.map((t) =>
+            t.id === currentTeam.id ? updatedTeam : t
+          ),
+          currentTeam: updatedTeam,
+        }));
+
+        get().addToast('success', `已为 ${member.name} 补打卡`);
+
+        if (allChecked && memberCount >= minMembers) {
+          get().addToast(
+            'success',
+            `全队今日都打卡了！累计 ${newCurrentDays}/${currentTeam.targetDays} 天`
+          );
+        }
+
+        if (rewardUnlocked) {
+          get().addToast('success', '🎉 组队任务完成！可以领取全队奖励了！');
+        }
+      },
+
+      simulateTeamMemberReading: (memberId, chapters) => {
+        get().refreshDailyState();
+        const { currentTeam, user } = get();
+        if (!currentTeam) return;
+
+        if (currentTeam.members[0]?.id !== user.id) {
+          get().addToast('error', '只有队长才能补阅读');
+          return;
+        }
+
+        const member = currentTeam.members.find((m) => m.id === memberId);
+        if (!member) {
+          get().addToast('error', '未找到该成员');
+          return;
+        }
+
+        const updatedMembers = currentTeam.members.map((m) =>
+          m.id === memberId
+            ? { ...m, todayReadingChapters: (m.todayReadingChapters || 0) + chapters }
+            : m
+        );
+
+        const updatedTeam = {
+          ...currentTeam,
+          members: updatedMembers,
+        };
+
+        set((state) => ({
+          teams: state.teams.map((t) =>
+            t.id === currentTeam.id ? updatedTeam : t
+          ),
+          currentTeam: updatedTeam,
+        }));
+
+        get().addToast('success', `已为 ${member.name} 补阅读 ${chapters} 章`);
+      },
+
       useCoupon: (couponId, comicId, chapters) => {
         const { coupons, user } = get();
         const coupon = coupons.find((c) => c.id === couponId);
@@ -732,9 +1010,21 @@ export const useStore = create<AppState>()(
 
         const category = categories.find((c) => c.id === comic.categoryId);
 
+        const totalPrice = chapters * comic.pricePerChapter;
+        const couponAmount = Math.min(coupon.amount, totalPrice);
+        const selfPayAmount = Math.max(0, totalPrice - coupon.amount);
+        const remainingAmount = Math.max(0, coupon.amount - totalPrice);
+
         const updatedCoupons = coupons.map((c) =>
           c.id === couponId
-            ? { ...c, isUsed: true, usedForComic: comic.title, usedDate: getToday(), usedChapters: chapters }
+            ? { 
+                ...c, 
+                isUsed: true, 
+                usedForComic: comic.title, 
+                usedDate: getToday(), 
+                usedChapters: chapters,
+                remainingAmount: remainingAmount > 0 ? remainingAmount : undefined,
+              }
             : c
         );
 
@@ -745,11 +1035,14 @@ export const useStore = create<AppState>()(
           comicTitle: comic.title,
           comicCover: comic.cover,
           chaptersRead: chapters,
-          savedAmount: coupon.amount,
+          savedAmount: couponAmount,
           readDate: getToday(),
           category: category?.name || '',
           couponType: coupon.type,
           couponId: coupon.id,
+          totalPrice,
+          couponAmount,
+          selfPayAmount,
         };
 
         set({
@@ -757,7 +1050,7 @@ export const useStore = create<AppState>()(
           readingRecords: [newRecord, ...get().readingRecords],
           user: {
             ...get().user,
-            totalSaved: get().user.totalSaved + coupon.amount,
+            totalSaved: get().user.totalSaved + couponAmount,
           },
         });
 

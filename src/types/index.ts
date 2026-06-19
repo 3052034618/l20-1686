@@ -20,6 +20,13 @@ export interface User {
     date: string;
     tasks: ('checkIn' | 'share' | 'reading')[];
   };
+  weeklyTasks: {
+    weekKey: string;
+    checkInDays: number;
+    shareDays: number;
+    readingDays: number;
+    claimedWeeks: string[];
+  };
 }
 
 export type CouponType = 'daily' | 'share' | 'reading' | 'team';
@@ -35,6 +42,19 @@ export interface Coupon {
   usedForComic?: string;
   usedChapters?: number;
   usedDate?: string;
+  remainingAmount?: number;
+}
+
+export interface TeamDailyRecord {
+  date: string;
+  members: {
+    memberId: string;
+    memberName: string;
+    memberAvatar: string;
+    checkedIn: boolean;
+    readingChapters: number;
+  }[];
+  allChecked: boolean;
 }
 
 export interface TeamMember {
@@ -57,6 +77,7 @@ export interface Team {
   rewardClaimed: boolean;
   rewardAmount: number;
   lastTeamCheckDate: string;
+  dailyHistory: TeamDailyRecord[];
 }
 
 export interface ReadingRecord {
@@ -71,6 +92,9 @@ export interface ReadingRecord {
   category: string;
   couponType?: CouponType;
   couponId?: string;
+  couponAmount?: number;
+  selfPayAmount?: number;
+  totalPrice?: number;
 }
 
 export interface Badge {
@@ -116,6 +140,15 @@ export interface DailyTask {
   completed: boolean;
   claimed: boolean;
   completedAt?: string;
+}
+
+export interface WeeklyTask {
+  type: 'checkIn' | 'share' | 'reading';
+  title: string;
+  description: string;
+  icon: string;
+  target: number;
+  reward: number;
 }
 
 export interface ToastMessage {

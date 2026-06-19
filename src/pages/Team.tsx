@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Users,
   Plus,
@@ -10,6 +10,8 @@ import {
   Calendar,
   Gift,
   AlertTriangle,
+  UserPlus,
+  Sparkles,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import TeamModal from '@/components/Modals/TeamModal';
@@ -17,10 +19,24 @@ import ProgressBar from '@/components/ProgressBar';
 import { formatDateCN } from '@/utils/date';
 
 const Team = () => {
-  const { currentTeam, user, teams: allTeams, teamCheckIn, claimTeamReward, leaveTeam, joinTeam } = useStore();
+  const {
+    currentTeam,
+    user,
+    teams: allTeams,
+    teamCheckIn,
+    claimTeamReward,
+    leaveTeam,
+    joinTeam,
+    refreshDailyState,
+    inviteRandomMember,
+  } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [joinCode, setJoinCode] = useState('');
+
+  useEffect(() => {
+    refreshDailyState();
+  }, []);
 
   const handleCopyCode = () => {
     if (currentTeam) {
@@ -184,15 +200,32 @@ const Team = () => {
                         '未打卡'
                       )}
                     </span>
+                    {member.todayReadingChapters > 0 && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full mt-1 bg-primary-50 text-primary-600">
+                        📖 今日阅读{member.todayReadingChapters}章
+                      </span>
+                    )}
                   </div>
                 ))}
                 {currentTeam.members.length < 5 && (
-                  <div
-                    onClick={() => setShowModal(true)}
-                    className="p-4 rounded-2xl border-2 border-dashed border-dark-200 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-all"
-                  >
-                    <Plus size={28} className="mx-auto mb-2 text-dark-400" />
-                    <p className="text-sm text-dark-500">邀请队友</p>
+                  <div className="p-4 rounded-2xl border-2 border-dashed border-primary-300 text-center bg-primary-50/30">
+                    <UserPlus size={28} className="mx-auto mb-2 text-primary-400" />
+                    <p className="text-sm font-medium text-primary-600 mb-2">邀请室友/社团同学</p>
+                    {isLeader && (
+                      <button
+                        onClick={inviteRandomMember}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow hover:shadow-md hover:scale-105 active:scale-95 transition-all"
+                      >
+                        <Sparkles size={12} />
+                        一键邀请
+                      </button>
+                    )}
+                    <p
+                      onClick={() => setShowModal(true)}
+                      className="text-xs text-primary-400 mt-2 cursor-pointer hover:text-primary-600 transition-colors"
+                    >
+                      或分享队伍码邀请
+                    </p>
                   </div>
                 )}
               </div>
@@ -211,6 +244,16 @@ const Team = () => {
                 <Calendar size={20} />
                 {myMember?.todayChecked ? '今日已打卡' : '今日打卡'}
               </button>
+
+              {isLeader && currentTeam.members.length < 5 && (
+                <button
+                  onClick={inviteRandomMember}
+                  className="flex items-center gap-2 px-8 py-3 rounded-full font-bold text-lg bg-gradient-to-r from-manga-purple to-purple-500 text-white shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all"
+                >
+                  <Sparkles size={20} />
+                  一键邀请随机成员
+                </button>
+              )}
 
               {currentTeam.rewardUnlocked && !currentTeam.rewardClaimed && (
                 <button

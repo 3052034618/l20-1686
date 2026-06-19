@@ -6,8 +6,11 @@ import {
   Sparkles,
   Gift,
   BookOpen,
+  Clock,
   Share2,
   TrendingUp,
+  Timer,
+  Wallet,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { categories } from '@/data/categories';
@@ -19,6 +22,14 @@ import ProgressBar from '@/components/ProgressBar';
 import { getAvailableCoupons, getExpiringCoupons } from '@/utils/coupon';
 import { getToday, getDaysInMonth, getFirstDayOfMonth } from '@/utils/date';
 
+const formatTime = (isoString?: string) => {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  return `完成于 ${h}:${m}`;
+};
+
 const Supply = () => {
   const {
     user,
@@ -29,11 +40,34 @@ const Supply = () => {
     claimTaskReward,
     setShowCategorySelector,
     useCoupon,
+    refreshDailyState,
   } = useStore();
 
   const [tasks, setTasks] = useState<DailyTask[]>([]);
+  const [countdown, setCountdown] = useState('');
   const availableCoupons = getAvailableCoupons(coupons);
   const expiringCoupons = getExpiringCoupons(coupons);
+
+  useEffect(() => {
+    refreshDailyState();
+  }, []);
+
+  useEffect(() => {
+    const calc = () => {
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      const diff = tomorrow.getTime() - now.getTime();
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setCountdown(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+    };
+    calc();
+    const timer = setInterval(calc, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const today = getToday();
@@ -53,6 +87,7 @@ const Supply = () => {
         target: 1,
         completed: user.todayTasks.checkIn,
         claimed: isClaimed('checkIn'),
+        completedAt: user.todayTasks.checkInTime,
       },
       {
         id: 'task-share',
@@ -65,6 +100,7 @@ const Supply = () => {
         target: 1,
         completed: user.todayTasks.share,
         claimed: isClaimed('share'),
+        completedAt: user.todayTasks.shareTime,
       },
       {
         id: 'task-reading',
@@ -77,6 +113,7 @@ const Supply = () => {
         target: user.todayTasks.readingTarget,
         completed: user.todayTasks.reading >= user.todayTasks.readingTarget,
         claimed: isClaimed('reading'),
+        completedAt: user.todayTasks.readingTime,
       },
     ];
     setTasks(dailyTasks);
@@ -97,6 +134,16 @@ const Supply = () => {
 
   const recommendedComics = comics.filter((c) =>
     user.selectedCategories.includes(c.categoryId)
+  );
+
+  const taskRewardMap: Record<string, number> = {
+    checkIn: user.continuousCheckInDays >= 7 ? 3 : 1,
+    share: 2,
+    reading: 5,
+  };
+  const todayClaimedAmount = user.claimedTasks.tasks.reduce(
+    (sum, t) => sum + (taskRewardMap[t] || 0),
+    0
   );
 
   return (
@@ -244,26 +291,48 @@ const Supply = () => {
       </div>
 
       <div className="animate-fade-in-up stagger-3">
-        <h2 className="font-display text-2xl font-bold text-dark-800 mb-4 flex items-center gap-2">
-          <Gift size={24} className="text-primary-500" />
-          今日任务
-        </h2>
-        <div className="space-y-4">
-          {tasks.map((task, index) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onComplete={
-                task.type === 'checkIn'
-                  ? checkIn
-                  : task.type === 'share'
-                  ? shareChapter
-                  : undefined
-              }
-              onClaim={() => claimTaskReward(task.type)}
-              delay={index * 100}
-            />
-          ))}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display text-2xl font-bold text-dark-800 flex items-center gap-2">
+            <Gift size={24} className="text-primary-500" />
+            今日任务
+          </h2>
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-1.5 text-primary-600 font-medium bg-primary-50 px-3 py-1.5 rounded-full">
+              <Wallet size={16} />
+              <span>已领 ¥{todayClaimedAmount.toFixed(1)}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-dark-500 bg-dark-50 px-3 py-1.5 rounded-full">
+              <Timer size={16} />
+              <span className="font-mono tabular-nums">{countdown}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-gradient-to-br from-primary-50 via-white to-purple-50 p-1">
+          <div className="rounded-xl bg-white/80 backdrop-blur-sm p-4 space-y-3">
+            {tasks.map((task, index) => (
+              <div key={task.id}>
+                <TaskCard
+                  task={task}
+                  onComplete={
+                    task.type === 'checkIn'
+                      ? checkIn
+                      : task.type === 'share'
+                      ? shareChapter
+                      : undefined
+                  }
+                  onClaim={() => claimTaskReward(task.type)}
+                  delay={index * 100}
+                />
+                {task.completed && task.completedAt && (
+                  <p className="text-xs text-dark-400 mt-1 ml-[4.5rem] flex items-center gap-1">
+                    <Clock size={12} />
+                    {formatTime(task.completedAt)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -307,7 +376,7 @@ const Supply = () => {
                     {availableCoupons.length > 0 && (
                       <button
                         onClick={() =>
-                          useCoupon(availableCoupons[0].id, comic.id)
+                          useCoupon(availableCoupons[0].id, comic.id, Math.floor(availableCoupons[0].amount / comic.pricePerChapter))
                         }
                         className="w-full text-xs py-1.5 bg-primary-500 text-white rounded-full hover:bg-primary-600 transition-colors"
                       >
@@ -340,7 +409,7 @@ const Supply = () => {
                 coupon={coupon}
                 onUse={() => {
                   if (recommendedComics.length > 0) {
-                    useCoupon(coupon.id, recommendedComics[0].id);
+                    useCoupon(coupon.id, recommendedComics[0].id, Math.floor(coupon.amount / recommendedComics[0].pricePerChapter));
                   }
                 }}
                 delay={index * 100}

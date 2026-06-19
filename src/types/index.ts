@@ -9,8 +9,11 @@ export interface User {
   lastActiveDate: string;
   todayTasks: {
     checkIn: boolean;
+    checkInTime?: string;
     share: boolean;
+    shareTime?: string;
     reading: number;
+    readingTime?: string;
     readingTarget: number;
   };
   claimedTasks: {
@@ -30,6 +33,7 @@ export interface Coupon {
   expireDate: string;
   isUsed: boolean;
   usedForComic?: string;
+  usedChapters?: number;
   usedDate?: string;
 }
 
@@ -38,6 +42,7 @@ export interface TeamMember {
   name: string;
   avatar: string;
   todayChecked: boolean;
+  todayReadingChapters?: number;
 }
 
 export interface Team {
@@ -64,6 +69,8 @@ export interface ReadingRecord {
   savedAmount: number;
   readDate: string;
   category: string;
+  couponType?: CouponType;
+  couponId?: string;
 }
 
 export interface Badge {
@@ -108,6 +115,7 @@ export interface DailyTask {
   target: number;
   completed: boolean;
   claimed: boolean;
+  completedAt?: string;
 }
 
 export interface ToastMessage {

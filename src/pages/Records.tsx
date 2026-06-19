@@ -10,8 +10,13 @@ import {
   XCircle,
   BookOpen,
   Coins,
+  ChevronDown,
+  ChevronUp,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
+import { comics } from '@/data/comics';
 import { Badge } from '@/types';
 import ProgressBar from '@/components/ProgressBar';
 import CouponCard from '@/components/CouponCard';
@@ -22,6 +27,7 @@ import {
   getExpiringCoupons,
   getUsedCoupons,
   getExpiredCoupons,
+  couponTypeLabels,
 } from '@/utils/coupon';
 import { formatDateCN, daysUntil } from '@/utils/date';
 import { rarityLabels } from '@/data/badges';
@@ -29,11 +35,149 @@ import { rarityLabels } from '@/data/badges';
 type TabType = 'records' | 'coupons' | 'badges';
 type CouponTabType = 'available' | 'used' | 'expired';
 
+const ComicSelectPanel = ({
+  couponId,
+  couponAmount,
+  onConfirm,
+  onCancel,
+}: {
+  couponId: string;
+  couponAmount: number;
+  onConfirm: (comicId: string, chapters: number) => void;
+  onCancel: () => void;
+}) => {
+  const [selectedComic, setSelectedComic] = useState(comics[0]?.id || '');
+  const selectedComicData = comics.find((c) => c.id === selectedComic);
+  const defaultChapters = selectedComicData
+    ? Math.floor(couponAmount / selectedComicData.pricePerChapter)
+    : 1;
+  const [chapterCount, setChapterCount] = useState(defaultChapters);
+
+  const handleComicSelect = (comicId: string) => {
+    setSelectedComic(comicId);
+    const comic = comics.find((c) => c.id === comicId);
+    if (comic) {
+      setChapterCount(Math.floor(couponAmount / comic.pricePerChapter));
+    }
+  };
+
+  const maxChapters = selectedComicData ? selectedComicData.chapters : 1;
+  const totalPrice = selectedComicData
+    ? (chapterCount * selectedComicData.pricePerChapter).toFixed(1)
+    : '0';
+
+  return (
+    <div className="mt-4 bg-primary-50 rounded-2xl p-4 animate-fade-in-up">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-bold text-dark-800 flex items-center gap-2">
+          <BookOpen size={16} className="text-primary-500" />
+          选择漫画和章节数
+        </h4>
+        <button
+          onClick={onCancel}
+          className="text-dark-400 hover:text-dark-600 transition-colors"
+        >
+          <XCircle size={20} />
+        </button>
+      </div>
+
+      <div className="grid gap-2 max-h-48 overflow-y-auto mb-4 pr-1">
+        {comics.map((comic) => {
+          const isSelected = comic.id === selectedComic;
+          return (
+            <button
+              key={comic.id}
+              onClick={() => handleComicSelect(comic.id)}
+              className={`flex items-center gap-3 p-3 rounded-xl transition-all text-left ${
+                isSelected
+                  ? 'bg-primary-100 ring-2 ring-primary-400'
+                  : 'bg-white hover:bg-dark-50'
+              }`}
+            >
+              <img
+                src={comic.cover}
+                alt={comic.title}
+                className="w-10 h-14 rounded-lg object-cover flex-shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <p
+                  className={`font-bold text-sm truncate ${
+                    isSelected ? 'text-primary-700' : 'text-dark-800'
+                  }`}
+                >
+                  {comic.title}
+                </p>
+                <p className="text-xs text-dark-400 mt-0.5">
+                  {comic.chapters} 章 · ¥{comic.pricePerChapter}/章
+                </p>
+              </div>
+              {isSelected && (
+                <CheckCircle size={18} className="text-primary-500 flex-shrink-0" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="bg-white rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm text-dark-500">阅读章节数</span>
+          <span className="text-xs text-dark-400">
+            最多 {maxChapters} 章
+          </span>
+        </div>
+        <div className="flex items-center justify-center gap-4">
+          <button
+            onClick={() => setChapterCount(Math.max(1, chapterCount - 1))}
+            className="w-9 h-9 rounded-full bg-dark-100 flex items-center justify-center hover:bg-dark-200 transition-colors"
+          >
+            <Minus size={16} />
+          </button>
+          <input
+            type="number"
+            min={1}
+            max={maxChapters}
+            value={chapterCount}
+            onChange={(e) => {
+              const val = parseInt(e.target.value) || 1;
+              setChapterCount(Math.min(Math.max(1, val), maxChapters));
+            }}
+            className="w-16 text-center font-bold text-lg text-dark-800 border border-dark-200 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
+          />
+          <button
+            onClick={() => setChapterCount(Math.min(maxChapters, chapterCount + 1))}
+            className="w-9 h-9 rounded-full bg-dark-100 flex items-center justify-center hover:bg-dark-200 transition-colors"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+        <div className="mt-3 flex items-center justify-between text-sm">
+          <span className="text-dark-500">预计花费</span>
+          <span className="font-bold text-primary-600">¥{totalPrice}</span>
+        </div>
+        {parseFloat(totalPrice) > couponAmount && (
+          <p className="text-xs text-red-500 mt-1 text-center">
+            ⚠️ 花费超过券包金额（¥{couponAmount}），超出部分需自付
+          </p>
+        )}
+      </div>
+
+      <button
+        onClick={() => onConfirm(selectedComic, chapterCount)}
+        className="mt-4 w-full py-3 bg-primary-500 text-white font-bold rounded-xl hover:bg-primary-600 transition-colors shadow-md"
+      >
+        确认使用券包
+      </button>
+    </div>
+  );
+};
+
 const Records = () => {
   const { user, coupons, readingRecords, badges, useCoupon } = useStore();
   const [activeTab, setActiveTab] = useState<TabType>('records');
   const [couponTab, setCouponTab] = useState<CouponTabType>('available');
   const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
+  const [usingCoupon, setUsingCoupon] = useState<string | null>(null);
 
   const availableCoupons = getAvailableCoupons(coupons);
   const expiringCoupons = getExpiringCoupons(coupons);
@@ -64,6 +208,11 @@ const Records = () => {
     { id: 'used', label: `已使用 (${usedCoupons.length})` },
     { id: 'expired', label: `已过期 (${expiredCoupons.length})` },
   ] as const;
+
+  const handleUseCoupon = (couponId: string, comicId: string, chapters: number) => {
+    useCoupon(couponId, comicId, chapters);
+    setUsingCoupon(null);
+  };
 
   return (
     <div className="space-y-8">
@@ -223,9 +372,16 @@ const Records = () => {
                         <h4 className="font-bold text-dark-800 truncate">
                           {record.comicTitle}
                         </h4>
-                        <span className="inline-block text-xs px-2 py-0.5 bg-primary-100 text-primary-600 rounded-full mt-1">
-                          {record.category}
-                        </span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="inline-block text-xs px-2 py-0.5 bg-primary-100 text-primary-600 rounded-full">
+                            {record.category}
+                          </span>
+                          {record.couponType && (
+                            <span className="inline-block text-xs px-2 py-0.5 bg-dark-100 text-dark-500 rounded-full">
+                              来自：{couponTypeLabels[record.couponType]}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <span className="flex items-center gap-1 text-green-500 font-bold whitespace-nowrap">
                         <CheckCircle size={16} />
@@ -280,17 +436,36 @@ const Records = () => {
             {displayedCoupons.length > 0 ? (
               <div className="space-y-4">
                 {displayedCoupons.map((coupon, index) => (
-                  <CouponCard
-                    key={coupon.id}
-                    coupon={coupon}
-                    showUsed={couponTab === 'used'}
-                    onUse={
-                      couponTab === 'available'
-                        ? () => useCoupon(coupon.id, 'comic-001')
-                        : undefined
-                    }
-                    delay={index * 50}
-                  />
+                  <div key={coupon.id}>
+                    <CouponCard
+                      coupon={coupon}
+                      showUsed={couponTab === 'used'}
+                      onUse={
+                        couponTab === 'available'
+                          ? () => setUsingCoupon(coupon.id)
+                          : undefined
+                      }
+                      delay={index * 50}
+                    />
+                    {couponTab === 'used' && coupon.usedChapters && (
+                      <div className="mt-1 px-4 py-2 bg-green-50 rounded-b-xl -mt-2 border-t-0">
+                        <span className="text-xs text-green-600 flex items-center gap-1">
+                          <BookOpen size={12} />
+                          已阅读 {coupon.usedChapters} 章
+                        </span>
+                      </div>
+                    )}
+                    {usingCoupon === coupon.id && (
+                      <ComicSelectPanel
+                        couponId={coupon.id}
+                        couponAmount={coupon.amount}
+                        onConfirm={(comicId, chapters) =>
+                          handleUseCoupon(coupon.id, comicId, chapters)
+                        }
+                        onCancel={() => setUsingCoupon(null)}
+                      />
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (

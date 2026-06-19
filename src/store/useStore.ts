@@ -20,6 +20,17 @@ import {
 } from '@/utils/coupon';
 import { getToday, isYesterday, formatDate, daysUntil } from '@/utils/date';
 
+const randomMemberPool = [
+  { name: '二次元少女', seed: 'anime' },
+  { name: '热血少年', seed: 'shounen' },
+  { name: '推理迷', seed: 'detective' },
+  { name: '奇幻旅人', seed: 'fantasy' },
+  { name: '笑点担当', seed: 'comedy' },
+  { name: '运动健将', seed: 'sports' },
+  { name: '画师小梦', seed: 'artist' },
+  { name: '漫社社长', seed: 'president' },
+];
+
 interface AppState {
   user: User;
   coupons: Coupon[];
@@ -47,8 +58,9 @@ interface AppState {
   leaveTeam: () => void;
   teamCheckIn: () => void;
   claimTeamReward: () => void;
+  inviteRandomMember: () => void;
 
-  useCoupon: (couponId: string, comicId: string) => void;
+  useCoupon: (couponId: string, comicId: string, chapters: number) => void;
 
   addToast: (type: ToastMessage['type'], message: string) => void;
   removeToast: (id: string) => void;
@@ -69,8 +81,11 @@ const mockUser: User = {
   lastActiveDate: getToday(),
   todayTasks: {
     checkIn: false,
+    checkInTime: '',
     share: false,
+    shareTime: '',
     reading: 0,
+    readingTime: '',
     readingTarget: 3,
   },
   claimedTasks: {
@@ -85,18 +100,21 @@ const mockMembers: TeamMember[] = [
     name: '漫迷小王',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=manga',
     todayChecked: false,
+    todayReadingChapters: 0,
   },
   {
     id: 'member-002',
     name: '二次元少女',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=anime',
     todayChecked: true,
+    todayReadingChapters: 0,
   },
   {
     id: 'member-003',
     name: '热血少年',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=shounen',
     todayChecked: false,
+    todayReadingChapters: 0,
   },
 ];
 
@@ -162,8 +180,11 @@ const refreshDailyTasks = (user: User): User => {
       continuousCheckInDays: continuousDays,
       todayTasks: {
         checkIn: false,
+        checkInTime: '',
         share: false,
+        shareTime: '',
         reading: 0,
+        readingTime: '',
         readingTarget: 3,
       },
       claimedTasks: {
@@ -183,6 +204,7 @@ const refreshTeamDailyState = (team: Team): Team => {
     const refreshedMembers = team.members.map((m) => ({
       ...m,
       todayChecked: false,
+      todayReadingChapters: 0,
     }));
 
     return {
@@ -276,6 +298,7 @@ export const useStore = create<AppState>()(
             todayTasks: {
               ...state.user.todayTasks,
               checkIn: true,
+              checkInTime: new Date().toISOString(),
             },
           },
         }));
@@ -299,6 +322,7 @@ export const useStore = create<AppState>()(
             todayTasks: {
               ...state.user.todayTasks,
               share: true,
+              shareTime: new Date().toISOString(),
             },
           },
         }));
@@ -340,6 +364,7 @@ export const useStore = create<AppState>()(
               todayTasks: {
                 ...state.user.todayTasks,
                 reading: newReading,
+                readingTime: new Date().toISOString(),
               },
               totalSaved: state.user.totalSaved + savedAmount,
             },
@@ -442,6 +467,7 @@ export const useStore = create<AppState>()(
           name: user.name,
           avatar: user.avatar,
           todayChecked: false,
+          todayReadingChapters: 0,
         };
 
         const newTeam: Team = {
@@ -496,6 +522,7 @@ export const useStore = create<AppState>()(
           name: user.name,
           avatar: user.avatar,
           todayChecked: false,
+          todayReadingChapters: 0,
         };
 
         const updatedTeam = {
@@ -643,7 +670,56 @@ export const useStore = create<AppState>()(
         get().checkBadges();
       },
 
-      useCoupon: (couponId, comicId) => {
+      inviteRandomMember: () => {
+        const { currentTeam, user } = get();
+        if (!currentTeam) {
+          get().addToast('error', '你还没有加入队伍');
+          return;
+        }
+
+        if (currentTeam.members[0]?.id !== user.id) {
+          get().addToast('error', '只有队长才能邀请成员');
+          return;
+        }
+
+        if (currentTeam.members.length >= 5) {
+          get().addToast('error', '队伍已满（最多5人）');
+          return;
+        }
+
+        const existingNames = new Set(currentTeam.members.map((m) => m.name));
+        const available = randomMemberPool.filter((p) => !existingNames.has(p.name));
+        if (available.length === 0) {
+          get().addToast('info', '没有更多可邀请的成员了');
+          return;
+        }
+
+        const pick = available[Math.floor(Math.random() * available.length)];
+        const newMember: TeamMember = {
+          id: generateId(),
+          name: pick.name,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${pick.seed}`,
+          todayChecked: false,
+          todayReadingChapters: 0,
+        };
+
+        const updatedTeam = {
+          ...currentTeam,
+          members: [...currentTeam.members, newMember],
+        };
+
+        set((state) => ({
+          teams: state.teams.map((t) =>
+            t.id === currentTeam.id ? updatedTeam : t
+          ),
+          currentTeam: updatedTeam,
+        }));
+
+        get().addToast('success', `${pick.name} 加入了队伍！`);
+        get().checkBadges();
+      },
+
+      useCoupon: (couponId, comicId, chapters) => {
         const { coupons, user } = get();
         const coupon = coupons.find((c) => c.id === couponId);
         const comic = comics.find((c) => c.id === comicId);
@@ -658,7 +734,7 @@ export const useStore = create<AppState>()(
 
         const updatedCoupons = coupons.map((c) =>
           c.id === couponId
-            ? { ...c, isUsed: true, usedForComic: comic.title, usedDate: getToday() }
+            ? { ...c, isUsed: true, usedForComic: comic.title, usedDate: getToday(), usedChapters: chapters }
             : c
         );
 
@@ -668,10 +744,12 @@ export const useStore = create<AppState>()(
           comicId,
           comicTitle: comic.title,
           comicCover: comic.cover,
-          chaptersRead: Math.floor(coupon.amount / comic.pricePerChapter),
+          chaptersRead: chapters,
           savedAmount: coupon.amount,
           readDate: getToday(),
           category: category?.name || '',
+          couponType: coupon.type,
+          couponId: coupon.id,
         };
 
         set({
@@ -683,7 +761,7 @@ export const useStore = create<AppState>()(
           },
         });
 
-        get().addToast('success', `使用券阅读了 ${comic.title}！`);
+        get().addToast('success', `使用券阅读了 ${comic.title} ${chapters} 章！`);
         get().checkBadges();
       },
 

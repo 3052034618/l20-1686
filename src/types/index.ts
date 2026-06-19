@@ -6,11 +6,16 @@ export interface User {
   continuousCheckInDays: number;
   lastCheckInDate: string;
   totalSaved: number;
+  lastActiveDate: string;
   todayTasks: {
     checkIn: boolean;
     share: boolean;
     reading: number;
     readingTarget: number;
+  };
+  claimedTasks: {
+    date: string;
+    tasks: ('checkIn' | 'share' | 'reading')[];
   };
 }
 
@@ -44,7 +49,9 @@ export interface Team {
   currentDays: number;
   startDate: string;
   rewardUnlocked: boolean;
+  rewardClaimed: boolean;
   rewardAmount: number;
+  lastTeamCheckDate: string;
 }
 
 export interface ReadingRecord {

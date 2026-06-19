@@ -36,6 +36,11 @@ const Supply = () => {
   const expiringCoupons = getExpiringCoupons(coupons);
 
   useEffect(() => {
+    const today = getToday();
+    const isClaimed = (taskType: 'checkIn' | 'share' | 'reading') => {
+      return user.claimedTasks.date === today && user.claimedTasks.tasks.includes(taskType);
+    };
+
     const dailyTasks: DailyTask[] = [
       {
         id: 'task-checkin',
@@ -47,7 +52,7 @@ const Supply = () => {
         progress: user.todayTasks.checkIn ? 1 : 0,
         target: 1,
         completed: user.todayTasks.checkIn,
-        claimed: false,
+        claimed: isClaimed('checkIn'),
       },
       {
         id: 'task-share',
@@ -59,7 +64,7 @@ const Supply = () => {
         progress: user.todayTasks.share ? 1 : 0,
         target: 1,
         completed: user.todayTasks.share,
-        claimed: false,
+        claimed: isClaimed('share'),
       },
       {
         id: 'task-reading',
@@ -71,11 +76,11 @@ const Supply = () => {
         progress: user.todayTasks.reading,
         target: user.todayTasks.readingTarget,
         completed: user.todayTasks.reading >= user.todayTasks.readingTarget,
-        claimed: false,
+        claimed: isClaimed('reading'),
       },
     ];
     setTasks(dailyTasks);
-  }, [user.todayTasks, user.continuousCheckInDays]);
+  }, [user.todayTasks, user.continuousCheckInDays, user.claimedTasks]);
 
   const today = new Date();
   const year = today.getFullYear();
@@ -287,18 +292,29 @@ const Supply = () => {
                     {comic.title}
                   </h4>
                   <p className="text-xs text-dark-500 mb-2">
-                    {comic.chapters} 话
+                    {comic.chapters} 话 · ¥{comic.pricePerChapter}/章
                   </p>
-                  {availableCoupons.length > 0 && (
+                  <div className="space-y-2">
                     <button
-                      onClick={() =>
-                        useCoupon(availableCoupons[0].id, comic.id)
-                      }
-                      className="w-full text-xs py-1.5 bg-primary-500 text-white rounded-full hover:bg-primary-600 transition-colors"
+                      onClick={() => readChapter(comic.id, 1)}
+                      disabled={user.todayTasks.reading >= user.todayTasks.readingTarget}
+                      className="w-full text-xs py-1.5 bg-manga-blue text-white rounded-full hover:bg-manga-blue/80 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
-                      用券阅读
+                      {user.todayTasks.reading >= user.todayTasks.readingTarget
+                        ? '今日阅读已完成'
+                        : `模拟阅读1章 (+¥${comic.pricePerChapter})`}
                     </button>
-                  )}
+                    {availableCoupons.length > 0 && (
+                      <button
+                        onClick={() =>
+                          useCoupon(availableCoupons[0].id, comic.id)
+                        }
+                        className="w-full text-xs py-1.5 bg-primary-500 text-white rounded-full hover:bg-primary-600 transition-colors"
+                      >
+                        用券阅读
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

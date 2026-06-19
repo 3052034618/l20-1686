@@ -32,6 +32,10 @@ const Team = () => {
 
   const myMember = currentTeam?.members.find((m) => m.id === user.id);
   const isLeader = currentTeam?.members[0]?.id === user.id;
+  const memberCount = currentTeam?.members.length || 0;
+  const minMembers = 3;
+  const needsMore = Math.max(0, minMembers - memberCount);
+  const canUnlockProgress = memberCount >= minMembers;
 
   const availableTeams = allTeams.filter(
     (t) => !t.members.some((m) => m.id === user.id) && t.members.length < 5
@@ -121,10 +125,20 @@ const Team = () => {
                 color="pink"
                 size="lg"
               />
-              <p className="text-sm text-dark-500 mt-2">
-                开始于 {formatDateCN(currentTeam.startDate)}，还需{' '}
-                {currentTeam.targetDays - currentTeam.currentDays} 天解锁奖励
-              </p>
+              <div className="mt-2 space-y-1">
+                {!canUnlockProgress && (
+                  <p className="text-sm text-orange-600 font-medium flex items-center gap-1">
+                    <AlertTriangle size={14} />
+                    队伍还差 {needsMore} 人才能解锁全队奖励进度，快邀请小伙伴加入吧！
+                  </p>
+                )}
+                <p className="text-sm text-dark-500">
+                  开始于 {formatDateCN(currentTeam.startDate)}
+                  {canUnlockProgress
+                    ? `，还需 ${currentTeam.targetDays - currentTeam.currentDays} 天解锁奖励`
+                    : '（当前进度仅作展示，凑齐3人后开始累计有效天数）'}
+                </p>
+              </div>
             </div>
 
             <div className="mb-6">
@@ -198,7 +212,7 @@ const Team = () => {
                 {myMember?.todayChecked ? '今日已打卡' : '今日打卡'}
               </button>
 
-              {currentTeam.rewardUnlocked && (
+              {currentTeam.rewardUnlocked && !currentTeam.rewardClaimed && (
                 <button
                   onClick={claimTeamReward}
                   className="flex items-center gap-2 px-8 py-3 rounded-full font-bold text-lg bg-gradient-to-r from-manga-yellow to-orange-500 text-white shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all animate-pulse-glow"
@@ -207,18 +221,39 @@ const Team = () => {
                   领取全队奖励 ¥{currentTeam.rewardAmount}
                 </button>
               )}
+
+              {currentTeam.rewardClaimed && (
+                <div className="flex items-center gap-2 px-8 py-3 rounded-full font-bold text-lg bg-green-100 text-green-600">
+                  <Check size={20} />
+                  已领取全队奖励 ¥{currentTeam.rewardAmount}
+                </div>
+              )}
             </div>
 
             {currentTeam.rewardUnlocked && (
-              <div className="mt-6 p-4 bg-yellow-50 rounded-2xl border border-yellow-200">
+              <div className={`mt-6 p-4 rounded-2xl border ${
+                currentTeam.rewardClaimed
+                  ? 'bg-green-50 border-green-200'
+                  : 'bg-yellow-50 border-yellow-200'
+              }`}>
                 <div className="flex items-start gap-3">
-                  <Gift size={24} className="text-yellow-500 flex-shrink-0" />
+                  <Gift size={24} className={`flex-shrink-0 ${
+                    currentTeam.rewardClaimed ? 'text-green-500' : 'text-yellow-500'
+                  }`} />
                   <div>
-                    <p className="font-bold text-yellow-700">
-                      🎉 恭喜！组队任务已完成
+                    <p className={`font-bold ${
+                      currentTeam.rewardClaimed ? 'text-green-700' : 'text-yellow-700'
+                    }`}>
+                      {currentTeam.rewardClaimed
+                        ? '✓ 已领取全队奖励'
+                        : '🎉 恭喜！组队任务已完成'}
                     </p>
-                    <p className="text-sm text-yellow-600">
-                      全队每人可获得 {currentTeam.rewardAmount} 元阅读券，可用于平台内任意正版漫画章节。
+                    <p className={`text-sm ${
+                      currentTeam.rewardClaimed ? 'text-green-600' : 'text-yellow-600'
+                    }`}>
+                      {currentTeam.rewardClaimed
+                        ? `你已领取 ${currentTeam.rewardAmount} 元阅读券，可在兑换记录中查看。`
+                        : `全队每人可获得 ${currentTeam.rewardAmount} 元阅读券，可用于平台内任意正版漫画章节。`}
                     </p>
                   </div>
                 </div>
